@@ -1,1 +1,1 @@
-# offline_wallet
+# offline_digital_wallet
