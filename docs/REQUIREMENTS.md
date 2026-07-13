@@ -312,6 +312,7 @@ Enable **small-value digital payments without internet connectivity**, with an o
 
 ## 12. Priority Summary (MoSCoW)
 
+
 - **Must (MVP core):** FR-ID-01..04, FR-WAL-01..04, FR-ISS-01..06, FR-PAY-01..10, FR-SET-01..07, FR-LED-01..04, FR-RSK-01..05, FR-SYNC-01..06, FR-MER-01/02, FR-HIS-01/02; all `NFR-SEC`, `NFR-CRY`, `NFR-REL`, `NFR-CMP-01/02`, `NFR-LEG-01/02`.
 - **Should:** attestation/root detection, risk scoring, QR-only fallback, performance targets, observability, accessibility/localization.
 - **Could:** online merchant refunds, advanced per-denomination diagnostics, configurable issuing policy tuning.
