@@ -318,6 +318,6 @@ Enable **small-value digital payments without internet connectivity**, with an o
 - **Could:** online merchant refunds, advanced per-denomination diagnostics, configurable issuing policy tuning.
 - **Won't (this release):** multi-hop circulation, on-device coin splitting, anonymity/blind signatures, offline refunds, NFC, multi-currency.
 
----
+----
 
 *Requirements baseline for review. Changes should be tracked by requirement ID. Next: detailed [ARCHITECTURE.md](ARCHITECTURE.md), [SECURITY.md](SECURITY.md) threat model, [PAYMENT_PROTOCOL.md](PAYMENT_PROTOCOL.md), and sprint breakdown in [ROADMAP.md](ROADMAP.md).*
