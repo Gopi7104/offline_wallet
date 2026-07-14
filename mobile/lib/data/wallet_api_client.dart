@@ -1,5 +1,3 @@
-import 'package:offline_wallet/core/money.dart';
-
 /// HTTP client for wallet endpoints (talks to the backend).
 /// For now, uses dart:io HttpClient directly. In production, use
 /// a robust client like dio or http.

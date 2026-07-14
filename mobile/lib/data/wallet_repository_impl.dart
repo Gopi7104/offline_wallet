@@ -1,4 +1,5 @@
 import 'package:offline_wallet/core/money.dart';
+import 'package:offline_wallet/core/result.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'package:offline_wallet/domain/wallet_repository.dart';
 import 'wallet_api_client.dart';
@@ -17,9 +18,12 @@ class WalletRepositoryImpl implements WalletRepository {
     if (_cached != null) return _cached;
     try {
       final response = await apiClient.getWallet();
-      final balanceR = Money.fromPaise(response.paise);
-      if (balanceR is! Ok) return null;
-      _cached = Wallet(accountId: accountId, balance: balanceR.value);
+      final balance = switch (Money.fromPaise(response.paise)) {
+        Ok(:final value) => value,
+        Err() => null,
+      };
+      if (balance == null) return null;
+      _cached = Wallet(accountId: accountId, balance: balance);
       return _cached;
     } catch (e) {
       return null;
@@ -34,9 +38,10 @@ class WalletRepositoryImpl implements WalletRepository {
   @override
   Future<Money> loadFunds(String accountId, Money amount) async {
     final response = await apiClient.loadWallet(amount.paise);
-    final balanceR = Money.fromPaise(response.newBalancePaise);
-    if (balanceR is! Ok) throw Exception('Invalid balance from server');
-    final newBalance = balanceR.value;
+    final newBalance = switch (Money.fromPaise(response.newBalancePaise)) {
+      Ok(:final value) => value,
+      Err() => throw Exception('Invalid balance from server'),
+    };
     _cached = Wallet(accountId: accountId, balance: newBalance);
     return newBalance;
   }

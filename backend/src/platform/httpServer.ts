@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import { registerIdentityRoutes } from '../modules/identity/http';
 import { registerIssuanceRoutes } from '../modules/issuance/http';
 import { registerWalletRoutes } from '../modules/wallet/http';
+import { registerMerchantRoutes } from '../modules/merchant/http';
 import { registerPaymentRoutes } from '../modules/payment/http';
 import { registerSettlementRoutes } from '../modules/settlement/http';
 import { registerLedgerRoutes } from '../modules/ledger/http';
@@ -26,6 +27,7 @@ export function createServer(): Express {
   registerIdentityRoutes(v1);
   registerIssuanceRoutes(v1);
   registerWalletRoutes(v1);
+  registerMerchantRoutes(v1);
   registerPaymentRoutes(v1);
   registerSettlementRoutes(v1);
   registerLedgerRoutes(v1);

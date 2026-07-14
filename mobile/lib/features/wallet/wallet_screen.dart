@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'wallet_provider.dart';
 
@@ -84,17 +83,20 @@ class _LoadButton extends ConsumerWidget {
     );
   }
 
-  void _onLoadPressed(BuildContext context, WidgetRef ref) {
-    // Invalidate the walletProvider to refresh balance on the next load.
-    ref.refresh(loadWalletProvider(500)).then((_) {
+  Future<void> _onLoadPressed(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      // Re-trigger the load, then refresh the balance once it completes.
+      ref.invalidate(loadWalletProvider(500));
+      await ref.read(loadWalletProvider(500).future);
       ref.invalidate(walletProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Loaded ₹5'), duration: Duration(seconds: 2)),
       );
-    }).catchError((err) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    } catch (err) {
+      messenger.showSnackBar(
         SnackBar(content: Text('Load failed: $err'), duration: const Duration(seconds: 2)),
       );
-    });
+    }
   }
 }

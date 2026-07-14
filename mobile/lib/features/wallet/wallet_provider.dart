@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:offline_wallet/core/money.dart';
+import 'package:offline_wallet/core/result.dart';
 import 'package:offline_wallet/data/wallet_api_client_impl.dart';
 import 'package:offline_wallet/data/wallet_repository_impl.dart';
 import 'package:offline_wallet/domain/wallet.dart';
@@ -20,5 +21,9 @@ final walletProvider = FutureProvider<Wallet?>((ref) async {
 
 final loadWalletProvider = FutureProvider.family<Money, int>((ref, amountPaise) async {
   final repo = ref.watch(walletRepositoryProvider);
-  return repo.loadFunds('test-account-1', (Money.fromPaise(amountPaise) as Ok).value);
+  final amount = switch (Money.fromPaise(amountPaise)) {
+    Ok(:final value) => value,
+    Err(:final error) => throw error,
+  };
+  return repo.loadFunds('test-account-1', amount);
 });
