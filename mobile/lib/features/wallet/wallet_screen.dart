@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'wallet_provider.dart';
 
@@ -55,23 +54,31 @@ class _BalanceView extends ConsumerWidget {
   }
 }
 
-class _LoadButton extends ConsumerWidget {
+class _LoadButton extends ConsumerStatefulWidget {
   final Wallet currentWallet;
   const _LoadButton({required this.currentWallet});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final loadAsync = ref.watch(loadWalletProvider(500)); // Load ₹5 (500 paise)
+  ConsumerState<_LoadButton> createState() => _LoadButtonState();
+}
 
+class _LoadButtonState extends ConsumerState<_LoadButton> {
+  // Loading is tracked locally and driven ONLY by an explicit button press.
+  // The load provider is never watched during build, so opening the screen
+  // never triggers a load (QA fix).
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         ElevatedButton.icon(
-          onPressed: () => _onLoadPressed(context, ref),
+          onPressed: _loading ? null : _onLoadPressed,
           icon: const Icon(Icons.add_circle),
           label: const Text('Load ₹5'),
           key: const Key('load-button'),
         ),
-        if (loadAsync.isLoading)
+        if (_loading)
           const Padding(
             padding: EdgeInsets.only(top: 12),
             child: SizedBox(
@@ -84,17 +91,23 @@ class _LoadButton extends ConsumerWidget {
     );
   }
 
-  void _onLoadPressed(BuildContext context, WidgetRef ref) {
-    // Invalidate the walletProvider to refresh balance on the next load.
-    ref.refresh(loadWalletProvider(500)).then((_) {
+  Future<void> _onLoadPressed() async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _loading = true);
+    try {
+      // Trigger the load only now, on explicit press, then refresh the balance.
+      ref.invalidate(loadWalletProvider(500));
+      await ref.read(loadWalletProvider(500).future);
       ref.invalidate(walletProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Loaded ₹5'), duration: Duration(seconds: 2)),
       );
-    }).catchError((err) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    } catch (err) {
+      messenger.showSnackBar(
         SnackBar(content: Text('Load failed: $err'), duration: const Duration(seconds: 2)),
       );
-    });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 }

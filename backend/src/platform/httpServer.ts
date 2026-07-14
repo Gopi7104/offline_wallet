@@ -1,4 +1,4 @@
-import express, { Express, Request, Response } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import { registerIdentityRoutes } from '../modules/identity/http';
 import { registerIssuanceRoutes } from '../modules/issuance/http';
 import { registerWalletRoutes } from '../modules/wallet/http';
@@ -6,6 +6,7 @@ import { registerPaymentRoutes } from '../modules/payment/http';
 import { registerSettlementRoutes } from '../modules/settlement/http';
 import { registerLedgerRoutes } from '../modules/ledger/http';
 import { registerRiskRoutes } from '../modules/risk/http';
+import { InMemoryMerchantRepository } from '../modules/identity/infra/in_memory_merchant_repository';
 
 /**
  * Composition root for the modular monolith (ARCHITECTURE.md §5.1).
@@ -22,15 +23,33 @@ export function createServer(): Express {
     res.status(200).json({ status: 'ok', service: 'offline-wallet-backend', version: '1.1.0' });
   });
 
+  // Shared merchant store: Merchant Mode (Identity) enables merchants; the
+  // Customer Pay endpoint (Payment) validates against the same instance (Task 5).
+  const merchantRepository = new InMemoryMerchantRepository();
+
   const v1 = express.Router();
-  registerIdentityRoutes(v1);
+  registerIdentityRoutes(v1, { merchantRepository });
   registerIssuanceRoutes(v1);
   registerWalletRoutes(v1);
-  registerPaymentRoutes(v1);
+  registerPaymentRoutes(v1, { merchantRepository });
   registerSettlementRoutes(v1);
   registerLedgerRoutes(v1);
   registerRiskRoutes(v1);
   app.use('/v1', v1);
+
+  // Global error handler: return a consistent JSON object (never HTML) for
+  // malformed request bodies and other unhandled errors. Must be registered
+  // last and take 4 args so Express treats it as error-handling middleware.
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) return next(err);
+    // body-parser marks malformed JSON with type 'entity.parse.failed'.
+    if (err && (err as { type?: string }).type === 'entity.parse.failed') {
+      res.status(400).json({ error: 'INVALID_JSON', message: 'Request body is not valid JSON' });
+      return;
+    }
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An error occurred' });
+  });
 
   return app;
 }
