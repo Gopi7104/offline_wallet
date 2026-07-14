@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/core/result.dart';
 import 'package:offline_wallet/data/wallet_api_client_impl.dart';
@@ -10,7 +11,7 @@ import 'package:offline_wallet/domain/wallet_repository.dart';
 /// persistence and sync (ARCHITECTURE.md §8).
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
-  final apiClient = WalletApiClientImpl(baseUrl: 'http://localhost:3000');
+  final apiClient = WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl);
   return WalletRepositoryImpl(apiClient: apiClient);
 });
 

@@ -2,10 +2,16 @@ import { Money } from '../../../shared/money';
 import { randomUUID } from 'crypto';
 
 /**
- * MerchantWallet — value object holding the two buckets a merchant cares about
+ * MerchantWallet — read projection of the two buckets a merchant cares about
  * (FR-MER-02): funds received but not yet settled, and funds already settled.
- * Task 4: both start at zero; settlement (a later task) will move value from
- * pendingSettlement → settled. Immutable.
+ *
+ * OWNERSHIP (Architecture v1.1): the authoritative merchant balance is NOT
+ * stored here. `settled` maps to `accounts.settlement_balance` and `pending`
+ * to the `in_merchant_wallets_unsettled` money-supply bucket (§5.2, §5.4) —
+ * both owned by the Settlement/Ledger contexts. Task 4 is a placeholder: both
+ * buckets are zero until Settlement is implemented.
+ * TODO(Settlement): source these from settlement_balance + the ledger bucket
+ * rather than defaulting to zero. Immutable.
  */
 export class MerchantWallet {
   constructor(
@@ -24,13 +30,13 @@ export class MerchantWallet {
 }
 
 /**
- * Merchant — aggregate root for Merchant Mode (FR-MER-01, ARCHITECTURE.md §4.1).
- * A Merchant is a *role* on an existing account: enabling Merchant Mode mints a
- * Merchant ID and an empty merchant wallet with no separate registration.
- * Task 4 scope: no cryptography, no bank binding, no settlement.
- * Immutable: any future state change returns a new Merchant.
+ * MerchantProfile — the Merchant *role* on an Account (FR-MER-01, §4.1:
+ * "a user is a Customer and, in Merchant Mode, a Merchant"). This is NOT a
+ * separate bounded context: enabling Merchant Mode attaches a merchant identity
+ * and a (projected) wallet to an existing account, with no separate
+ * registration. Owned by the Identity & Device context. Immutable.
  */
-export class Merchant {
+export class MerchantProfile {
   constructor(
     readonly merchantId: string,
     readonly accountId: string,
@@ -43,8 +49,8 @@ export class Merchant {
    * Enable Merchant Mode for an account. Generates a fresh Merchant ID and an
    * empty merchant wallet.
    */
-  static create(accountId: string, displayName: string, now: Date): Merchant {
-    return new Merchant(
+  static create(accountId: string, displayName: string, now: Date): MerchantProfile {
+    return new MerchantProfile(
       generateMerchantId(),
       accountId,
       displayName,

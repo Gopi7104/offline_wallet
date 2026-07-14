@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Money } from '../../../shared/money';
 import { isErr, unwrap } from '../../../shared/result';
-import { WalletService } from '../application/wallet_service';
+import { WalletService, HoldingCapExceeded } from '../application/wallet_service';
 
 /**
  * HTTP controller (interface adapter). Parses requests, calls the service,
@@ -44,18 +44,20 @@ export class WalletController {
   async loadWallet(req: Request, res: Response): Promise<void> {
     try {
       const accountId = this.extractAccountId(req);
-      const { amount: amountPaise } = req.body;
+      const { amount: amountPaise } = req.body ?? {};
 
-      if (typeof amountPaise !== 'number') {
-        res.status(400).json({ error: 'INVALID_AMOUNT', message: 'amount must be a number' });
+      // Consistent with the payment endpoint: reject non-numbers, non-integers,
+      // and non-positive amounts (0 and negatives) with one INVALID_AMOUNT shape.
+      if (typeof amountPaise !== 'number' || !Number.isInteger(amountPaise) || amountPaise <= 0) {
+        res
+          .status(400)
+          .json({ error: 'INVALID_AMOUNT', message: 'amount must be a positive integer (paise)' });
         return;
       }
 
       const amountR = Money.fromPaise(amountPaise);
       if (isErr(amountR)) {
-        const err = amountR.error;
-        const msg = err instanceof Error ? err.message : String(err);
-        res.status(400).json({ error: 'INVALID_AMOUNT', message: msg });
+        res.status(400).json({ error: 'INVALID_AMOUNT', message: 'amount must be a positive integer (paise)' });
         return;
       }
       const amount = unwrap(amountR);
@@ -67,6 +69,11 @@ export class WalletController {
         newBalance: { paise: newBalance.paise, currency: newBalance.currency },
       });
     } catch (error) {
+      // FR-ISS-06 holding cap → 400 JSON (a well-formed but rejected request).
+      if (error instanceof HoldingCapExceeded) {
+        res.status(400).json({ error: error.code, message: error.message });
+        return;
+      }
       this.handleError(error, res);
     }
   }

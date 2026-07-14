@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
 import { MerchantService } from '../application/merchant_service';
-import { Merchant } from '../domain/merchant';
+import { MerchantProfile } from '../domain/merchant_profile';
 
 /**
- * HTTP controller (interface adapter) for Merchant Mode. Parses requests,
- * calls the service, returns JSON (ARCHITECTURE.md §5.1). Auth is stubbed via
- * the x-account-id header, consistent with WalletController (a later task
- * replaces it with the Firebase session exchange).
+ * HTTP controller (interface adapter) for Merchant Mode, in the Identity &
+ * Device context. Parses requests, calls the service, returns JSON
+ * (ARCHITECTURE.md §5.1). Auth is stubbed via the x-account-id header,
+ * consistent with WalletController (a later task replaces it with the Firebase
+ * session exchange). Public API and response contracts are unchanged from
+ * Task 4.
  */
 export class MerchantController {
   constructor(private readonly service: MerchantService) {}
@@ -17,8 +19,8 @@ export class MerchantController {
       const accountId = this.extractAccountId(req);
       const displayName =
         typeof req.body?.displayName === 'string' ? req.body.displayName : undefined;
-      const merchant = await this.service.enableMerchantMode(accountId, displayName);
-      res.status(201).json(this.toJson(merchant));
+      const profile = await this.service.enableMerchantMode(accountId, displayName);
+      res.status(201).json(this.toJson(profile));
     } catch (error) {
       this.handleError(error, res);
     }
@@ -28,15 +30,15 @@ export class MerchantController {
   async getDashboard(req: Request, res: Response): Promise<void> {
     try {
       const accountId = this.extractAccountId(req);
-      const merchant = await this.service.getByAccountId(accountId);
-      if (!merchant) {
+      const profile = await this.service.getByAccountId(accountId);
+      if (!profile) {
         res.status(404).json({
           error: 'MERCHANT_NOT_ENABLED',
           message: 'Merchant Mode is not enabled for this account',
         });
         return;
       }
-      res.json(this.toJson(merchant));
+      res.json(this.toJson(profile));
     } catch (error) {
       this.handleError(error, res);
     }
@@ -74,7 +76,7 @@ export class MerchantController {
     }
   }
 
-  private toJson(m: Merchant) {
+  private toJson(m: MerchantProfile) {
     return {
       merchantId: m.merchantId,
       accountId: m.accountId,

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/data/merchant_api_client_impl.dart';
 import 'package:offline_wallet/data/merchant_repository_impl.dart';
 import 'package:offline_wallet/domain/merchant.dart';
@@ -12,7 +13,7 @@ import 'package:offline_wallet/domain/merchant_repository.dart';
 const String kMerchantAccountId = 'test-account-1';
 
 final merchantRepositoryProvider = Provider<MerchantRepository>((ref) {
-  final apiClient = MerchantApiClientImpl(baseUrl: 'http://localhost:3000');
+  final apiClient = MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl);
   return MerchantRepositoryImpl(apiClient: apiClient);
 });
 

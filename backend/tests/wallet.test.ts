@@ -3,7 +3,7 @@ import { createServer } from '../src/platform/httpServer';
 import { Wallet, TokenNotFoundError } from '../src/modules/wallet/domain/wallet';
 import { InMemoryWalletRepository } from '../src/modules/wallet/infra/in_memory_wallet_repository';
 import { InMemoryTokenRepository } from '../src/modules/issuance/infra/in_memory_token_repository';
-import { WalletService } from '../src/modules/wallet/application/wallet_service';
+import { WalletService, HoldingCapExceeded } from '../src/modules/wallet/application/wallet_service';
 import { IssuanceService } from '../src/modules/issuance/application/issuance_service';
 import { Token, IllegalTokenTransition } from '../src/modules/issuance/domain/token';
 import { Money, PAISE_PER_RUPEE } from '../src/shared/money';
@@ -177,6 +177,19 @@ describe('Wallet (Task 3: digital cash tokens)', () => {
       const balance = await service.getBalance('ivy');
       expect(balance?.paise).toBe(3300);
     });
+
+    it('rejects a load that would exceed the holding cap (FR-ISS-06)', async () => {
+      const overCap = unwrap(Money.fromPaise(WalletService.DEFAULT_MAX_HOLDING_PAISE + 100));
+      await expect(service.loadWallet('cap-user', overCap)).rejects.toBeInstanceOf(HoldingCapExceeded);
+      // Over-cap request must not mint anything.
+      expect(await service.getBalance('cap-user')).toBeNull();
+    });
+
+    it('allows a load exactly at the holding cap', async () => {
+      const atCap = unwrap(Money.fromPaise(WalletService.DEFAULT_MAX_HOLDING_PAISE));
+      const balance = await service.loadWallet('cap-edge', atCap);
+      expect(balance.paise).toBe(WalletService.DEFAULT_MAX_HOLDING_PAISE);
+    });
   });
 
   describe('HTTP integration (Task 3: tokens internal, API external same as Task 2)', () => {
@@ -235,6 +248,34 @@ describe('Wallet (Task 3: digital cash tokens)', () => {
         .send({ amount: 7 * PAISE_PER_RUPEE });
       const res = await request(app).get('/v1/wallet').set('x-account-id', accountId);
       expect(res.body.balance.paise).toBe(700);
+    });
+
+    it('rejects loading amount 0 (INVALID_AMOUNT, consistent with payment)', async () => {
+      const res = await request(app)
+        .post('/v1/wallet/load')
+        .set('x-account-id', 'zero-acct')
+        .send({ amount: 0 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_AMOUNT');
+    });
+
+    it('rejects a load above the holding cap with JSON (FR-ISS-06)', async () => {
+      const res = await request(app)
+        .post('/v1/wallet/load')
+        .set('x-account-id', 'cap-http')
+        .send({ amount: 50_000 * PAISE_PER_RUPEE + 100 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('HOLDING_CAP_EXCEEDED');
+    });
+
+    it('returns a JSON error (not HTML) for malformed JSON', async () => {
+      const res = await request(app)
+        .post('/v1/wallet/load')
+        .set('x-account-id', 'json-acct')
+        .set('Content-Type', 'application/json')
+        .send('{ bad json');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_JSON');
     });
   });
 });

@@ -42,6 +42,7 @@ void main() {
     // Boots on the Home screen.
     expect(find.text('Offline Wallet'), findsOneWidget);
     expect(find.byKey(const Key('open-wallet')), findsOneWidget);
+    expect(find.byKey(const Key('open-pay')), findsOneWidget);
     expect(find.byKey(const Key('merchant-mode-toggle')), findsOneWidget);
 
     // Merchant Mode starts off — no dashboard nav yet.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/features/pay/pay_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_dashboard_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_provider.dart';
 import 'package:offline_wallet/features/wallet/wallet_screen.dart';
@@ -7,6 +8,7 @@ import 'package:offline_wallet/features/wallet/wallet_screen.dart';
 /// Home screen — the app's navigation hub (ARCHITECTURE.md §6.1 `app/`).
 /// Task 4: opens the Wallet, and hosts the Merchant Mode toggle that enables
 /// Merchant Mode and opens the merchant dashboard.
+/// Task 5: opens the Customer Pay flow.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -29,6 +31,19 @@ class HomeScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const WalletScreen()),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              key: const Key('open-pay'),
+              leading: const Icon(Icons.qr_code_scanner),
+              title: const Text('Pay'),
+              subtitle: const Text('Scan a merchant QR and pay'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PayScreen()),
               ),
             ),
           ),

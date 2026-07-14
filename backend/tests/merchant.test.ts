@@ -1,14 +1,18 @@
 import request from 'supertest';
 import { createServer } from '../src/platform/httpServer';
-import { Merchant, MerchantWallet, generateMerchantId } from '../src/modules/merchant/domain/merchant';
-import { InMemoryMerchantRepository } from '../src/modules/merchant/infra/in_memory_merchant_repository';
-import { MerchantService } from '../src/modules/merchant/application/merchant_service';
+import {
+  MerchantProfile,
+  MerchantWallet,
+  generateMerchantId,
+} from '../src/modules/identity/domain/merchant_profile';
+import { InMemoryMerchantRepository } from '../src/modules/identity/infra/in_memory_merchant_repository';
+import { MerchantService } from '../src/modules/identity/application/merchant_service';
 
-describe('Merchant Mode (Task 4: vertical slice)', () => {
-  describe('Merchant aggregate (domain)', () => {
+describe('Merchant Mode (Task 4: vertical slice; Identity context per Architecture v1.1)', () => {
+  describe('MerchantProfile aggregate (Identity domain)', () => {
     it('creates a merchant with a generated ID and an empty wallet', () => {
       const now = new Date();
-      const m = Merchant.create('alice', 'Alice Store', now);
+      const m = MerchantProfile.create('alice', 'Alice Store', now);
       expect(m.accountId).toBe('alice');
       expect(m.displayName).toBe('Alice Store');
       expect(m.merchantId).toMatch(/^MER-[0-9A-F]{12}$/);
