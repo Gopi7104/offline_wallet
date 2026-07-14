@@ -1,0 +1,31 @@
+name: offline_wallet
+description: Offline Digital Cash Wallet — mobile app (Flutter, Android + iOS). Architecture v1.1.
+publish_to: "none"
+version: 1.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # State management — Riverpod (ADR-5): compile-safe DI + testable providers.
+  flutter_riverpod: ^2.5.1
+
+  # Added in their respective feature tasks (kept out of the skeleton so
+  # `flutter pub get` stays light and platform plugins land with their code):
+  #   drift + sqlcipher_flutter_libs   — encrypted local store (ADR-6, data/)
+  #   flutter_blue_plus                — BLE value transfer (platform/)
+  #   mobile_scanner                   — QR discovery (platform/)
+  #   qr_flutter                       — QR generation (features/receive)
+  #   cryptography / sodium            — Ed25519, AES-256-GCM, HKDF (core/crypto)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
