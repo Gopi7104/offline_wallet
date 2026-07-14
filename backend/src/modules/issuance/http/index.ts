@@ -1,14 +1,13 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
 
 /**
  * Issuance (Mint) context (ARCHITECTURE.md §4.1).
- * Owns: minting coins from bank funds, denomination policy.
- * Atomic debit + mint + ledger entry (FR-ISS-02); expiry (FR-ISS-05).
- * Endpoint (§5.6): POST /v1/wallet/load.
- * Implemented in the Token issuance task.
+ * Owns: minting coins from bank funds, denomination policy (FR-ISS-02/03/05).
+ * Task 2: wallet/load is a simplified balance endpoint (handled by wallet module).
+ * Task 5: Token issuance will implement the real coin-minting endpoint here,
+ * and migrate wallet/load away from the wallet module.
+ * For now, no routes here (to avoid conflicts with wallet during Task 2).
  */
-export function registerIssuanceRoutes(router: Router): void {
-  router.post('/wallet/load', (_req: Request, res: Response) =>
-    res.status(501).json({ error: 'NOT_IMPLEMENTED', context: 'issuance' }),
-  );
+export function registerIssuanceRoutes(_router: Router): void {
+  // No routes yet; coins come in Task 5.
 }
