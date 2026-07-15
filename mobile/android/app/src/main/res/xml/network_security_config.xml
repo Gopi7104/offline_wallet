@@ -7,7 +7,7 @@
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <!-- Physical device → this dev Mac's LAN IP -->
-        <domain includeSubdomains="false">172.31.99.94</domain>
+        <domain includeSubdomains="false">10.205.185.61</domain>
         <!-- Android emulator → host-loopback alias -->
         <domain includeSubdomains="false">10.0.2.2</domain>
         <!-- Local loopback -->

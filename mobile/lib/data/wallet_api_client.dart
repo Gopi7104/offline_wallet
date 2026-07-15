@@ -6,7 +6,24 @@ abstract interface class WalletApiClient {
   Future<WalletResponse> getWallet();
 
   /// POST /v1/wallet/load — load funds from the bank.
+  /// Throws [WalletApiException] on a 4xx (invalid amount / holding cap exceeded).
   Future<LoadResponse> loadWallet(int amountPaise);
+}
+
+/// Typed API failure carrying the backend's error code + message (mirrors
+/// `PaymentApiException`), so the funding UI can tell a holding-cap rejection
+/// (FR-ISS-06) apart from an invalid amount or a generic server error.
+class WalletApiException implements Exception {
+  final int statusCode;
+  final String code;
+  final String message;
+
+  WalletApiException(this.statusCode, this.code, this.message);
+
+  bool get isHoldingCapExceeded => code == 'HOLDING_CAP_EXCEEDED';
+
+  @override
+  String toString() => message.isNotEmpty ? message : code;
 }
 
 class WalletResponse {

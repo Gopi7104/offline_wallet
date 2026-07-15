@@ -42,16 +42,20 @@ class MerchantResponse {
   }
 }
 
-/// Wire DTO for the placeholder QR payload.
+/// Wire DTO for the QR payload. Wire field names are the compact keys from
+/// PAYMENT_PROTOCOL.md §5 (`v/typ/mid/n/ts/amt`); Dart property names stay
+/// descriptive.
 class QrResponse {
   final int v;
+  final String typ;
   final String merchantId;
   final String nonce;
-  final String ts;
+  final int ts; // epoch seconds
   final int? amountPaise;
 
   QrResponse({
     required this.v,
+    required this.typ,
     required this.merchantId,
     required this.nonce,
     required this.ts,
@@ -61,11 +65,11 @@ class QrResponse {
   factory QrResponse.fromJson(Map<String, dynamic> json) {
     return QrResponse(
       v: (json['v'] as num).toInt(),
-      merchantId: json['merchantId'] as String,
-      nonce: json['nonce'] as String,
-      ts: json['ts'] as String,
-      amountPaise:
-          json['amountPaise'] == null ? null : (json['amountPaise'] as num).toInt(),
+      typ: json['typ'] as String,
+      merchantId: json['mid'] as String,
+      nonce: json['n'] as String,
+      ts: (json['ts'] as num).toInt(),
+      amountPaise: json['amt'] == null ? null : (json['amt'] as num).toInt(),
     );
   }
 }

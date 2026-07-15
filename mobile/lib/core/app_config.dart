@@ -7,7 +7,7 @@
 ///   flutter build apk --dart-define=API_BASE_URL=https://api.example.com
 ///
 /// Common targets:
-///   • Physical device : http://172.31.99.94:3000  (this dev Mac's LAN IP — the
+///   • Physical device : http://10.205.185.61:3000  (this dev Mac's LAN IP — the
 ///                       default, so `flutter run` works on the phone out of the
 ///                       box; the phone cannot reach the Mac via `localhost`).
 ///   • Android emulator: http://10.0.2.2:3000       (host-loopback alias)
@@ -31,6 +31,6 @@ class AppConfig {
   /// `--dart-define=API_BASE_URL=…`; defaults to the dev Mac's LAN IP.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://172.31.99.94:3000',
+    defaultValue: 'http://10.205.185.61:3000',
   );
 }

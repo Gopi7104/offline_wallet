@@ -44,18 +44,26 @@ export class MerchantController {
     }
   }
 
-  /** POST /v1/merchant/qr — generate a placeholder payment QR payload. */
+  /**
+   * POST /v1/merchant/qr — create a Payment Request and generate its QR
+   * payload (Task 6.7; PAYMENT_PROTOCOL.md §5). `amountPaise` is optional:
+   * present → Fixed Amount Payment Request (QR carries `amt`, the payer never
+   * enters an amount); omitted → Open Amount Payment Request (QR has no
+   * `amt`, the payer enters the amount after scanning). QR/nonce generation
+   * itself stays owned by the Payment context (`buildQrPayload`); this
+   * endpoint only validates the request and looks up the merchant.
+   */
   async generateQr(req: Request, res: Response): Promise<void> {
     try {
       const accountId = this.extractAccountId(req);
 
       let amountPaise: number | undefined;
-      if (req.body?.amount !== undefined) {
-        const amount = req.body.amount;
-        if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 0) {
+      if (req.body?.amountPaise !== undefined) {
+        const amount = req.body.amountPaise;
+        if (typeof amount !== 'number' || !Number.isInteger(amount) || amount <= 0) {
           res.status(400).json({
             error: 'INVALID_AMOUNT',
-            message: 'amount must be a non-negative integer (paise)',
+            message: 'amountPaise must be a positive integer (paise)',
           });
           return;
         }

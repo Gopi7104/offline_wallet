@@ -54,21 +54,29 @@ class Merchant {
   int get hashCode => Object.hash(merchantId, accountId, displayName, wallet);
 }
 
-/// QrPayload — placeholder payment-QR contents (FR-PAY-01). Mirrors the backend
-/// wire contract {v, merchant_id, nonce, ts, amount?} and carries no secrets.
-/// Task 4 is a placeholder: no signing, no single-use nonce tracking yet.
+/// QrPayload — payment-QR contents (FR-PAY-01). Mirrors the wire contract
+/// defined by PAYMENT_PROTOCOL.md §5: {v, typ, mid, n, ts, amt?}, carrying no
+/// secrets. Task 4 is a placeholder: no signing, no single-use nonce tracking
+/// yet.
 class QrPayload {
   final int v;
+  final String typ;
   final String merchantId;
   final String nonce;
-  final String ts;
+  final int ts; // epoch seconds
   final int? amountPaise;
 
   const QrPayload({
     required this.v,
+    this.typ = 'offer-req',
     required this.merchantId,
     required this.nonce,
     required this.ts,
     this.amountPaise,
   });
+
+  /// True for a Fixed Amount Payment Request (Task 6.7): the payer never
+  /// enters an amount. False is an Open Amount Payment Request: the payer
+  /// enters the amount after scanning.
+  bool get isFixedAmount => amountPaise != null;
 }

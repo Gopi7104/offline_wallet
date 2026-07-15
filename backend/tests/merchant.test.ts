@@ -76,23 +76,24 @@ describe('Merchant Mode (Task 4: vertical slice; Identity context per Architectu
       const payload = await service.generateQrPayload('dave');
       expect(payload).not.toBeNull();
       expect(payload!.v).toBe(1);
-      expect(payload!.merchantId).toBe(m.merchantId);
-      expect(payload!.nonce).toBeTruthy();
-      expect(typeof payload!.ts).toBe('string');
-      expect(payload!.amountPaise).toBeUndefined();
+      expect(payload!.typ).toBe('offer-req');
+      expect(payload!.mid).toBe(m.merchantId);
+      expect(payload!.n).toBeTruthy();
+      expect(typeof payload!.ts).toBe('number');
+      expect(payload!.amt).toBeUndefined();
     });
 
     it('generateQrPayload includes the requested amount when provided', async () => {
       await service.enableMerchantMode('erin');
       const payload = await service.generateQrPayload('erin', 20000);
-      expect(payload!.amountPaise).toBe(20000);
+      expect(payload!.amt).toBe(20000);
     });
 
     it('generates a fresh nonce per QR', async () => {
       await service.enableMerchantMode('frank');
       const a = await service.generateQrPayload('frank');
       const b = await service.generateQrPayload('frank');
-      expect(a!.nonce).not.toBe(b!.nonce);
+      expect(a!.n).not.toBe(b!.n);
     });
   });
 
@@ -133,11 +134,11 @@ describe('Merchant Mode (Task 4: vertical slice; Identity context per Architectu
       const res = await request(app)
         .post('/v1/merchant/qr')
         .set('x-account-id', 'ken')
-        .send({ amount: 50000 });
+        .send({ amountPaise: 50000 });
       expect(res.status).toBe(201);
-      expect(res.body.merchantId).toBe(enable.body.merchantId);
-      expect(res.body.nonce).toBeTruthy();
-      expect(res.body.amountPaise).toBe(50000);
+      expect(res.body.mid).toBe(enable.body.merchantId);
+      expect(res.body.n).toBeTruthy();
+      expect(res.body.amt).toBe(50000);
     });
 
     it('POST /v1/merchant/qr returns 404 before Merchant Mode is enabled', async () => {
@@ -151,9 +152,60 @@ describe('Merchant Mode (Task 4: vertical slice; Identity context per Architectu
       const res = await request(app)
         .post('/v1/merchant/qr')
         .set('x-account-id', 'mike')
-        .send({ amount: 1.5 });
+        .send({ amountPaise: 1.5 });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('INVALID_AMOUNT');
+    });
+  });
+
+  describe('Merchant Payment Request (Task 6.7: reuses POST /v1/merchant/qr)', () => {
+    const app = createServer();
+
+    it('Fixed Amount Request: amountPaise present → QR carries the requested amount', async () => {
+      const enable = await request(app).post('/v1/merchant/enable').set('x-account-id', 'nina');
+      const res = await request(app)
+        .post('/v1/merchant/qr')
+        .set('x-account-id', 'nina')
+        .send({ amountPaise: 25000 });
+      expect(res.status).toBe(201);
+      expect(res.body.mid).toBe(enable.body.merchantId);
+      expect(res.body.amt).toBe(25000);
+    });
+
+    it('Open Amount Request: amountPaise omitted → QR has no amount', async () => {
+      await request(app).post('/v1/merchant/enable').set('x-account-id', 'oscar');
+      const res = await request(app)
+        .post('/v1/merchant/qr')
+        .set('x-account-id', 'oscar')
+        .send({});
+      expect(res.status).toBe(201);
+      expect(res.body.amt).toBeUndefined();
+    });
+
+    it('Invalid Amount: zero or negative amountPaise is rejected', async () => {
+      await request(app).post('/v1/merchant/enable').set('x-account-id', 'paul');
+      const zero = await request(app)
+        .post('/v1/merchant/qr')
+        .set('x-account-id', 'paul')
+        .send({ amountPaise: 0 });
+      expect(zero.status).toBe(400);
+      expect(zero.body.error).toBe('INVALID_AMOUNT');
+
+      const negative = await request(app)
+        .post('/v1/merchant/qr')
+        .set('x-account-id', 'paul')
+        .send({ amountPaise: -500 });
+      expect(negative.status).toBe(400);
+      expect(negative.body.error).toBe('INVALID_AMOUNT');
+    });
+
+    it('Merchant Disabled: no Payment Request can be created before Merchant Mode is enabled', async () => {
+      const res = await request(app)
+        .post('/v1/merchant/qr')
+        .set('x-account-id', 'quinn')
+        .send({ amountPaise: 10000 });
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('MERCHANT_NOT_ENABLED');
     });
   });
 });

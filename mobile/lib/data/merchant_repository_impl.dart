@@ -34,6 +34,7 @@ class MerchantRepositoryImpl implements MerchantRepository {
     final response = await apiClient.generateQr(amountPaise: amountPaise);
     return QrPayload(
       v: response.v,
+      typ: response.typ,
       merchantId: response.merchantId,
       nonce: response.nonce,
       ts: response.ts,

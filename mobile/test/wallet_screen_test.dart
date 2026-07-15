@@ -40,18 +40,23 @@ void main() {
 
     // Screen rendered, balance shown, and crucially: no load was triggered.
     expect(find.byKey(const Key('balance-display')), findsOneWidget);
-    expect(find.byKey(const Key('load-button')), findsOneWidget);
+    expect(find.byKey(const Key('load-money-button')), findsOneWidget);
     expect(repo.loadCalls, 0);
   });
 
-  testWidgets('pressing Load triggers exactly one load', (tester) async {
+  testWidgets('pressing Load Money opens the funding flow (amount entry), no load yet',
+      (tester) async {
     final repo = FakeWalletRepository();
     await tester.pumpWidget(_screen(repo));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('load-button')));
+    await tester.tap(find.byKey(const Key('load-money-button')));
     await tester.pumpAndSettle();
 
-    expect(repo.loadCalls, 1);
+    // Now on the Load Money (amount entry) screen — the actual load call
+    // only happens after Review → Bank Account → UPI PIN (Task 6.6).
+    expect(find.text('Load Money'), findsOneWidget);
+    expect(find.byKey(const Key('load-money-continue')), findsOneWidget);
+    expect(repo.loadCalls, 0);
   });
 }

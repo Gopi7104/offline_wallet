@@ -6,9 +6,12 @@ import 'package:offline_wallet/domain/merchant_repository.dart';
 import 'package:offline_wallet/features/receive/merchant_dashboard_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_provider.dart';
 
-/// In-memory fake so the widget test never touches the network.
+/// In-memory fake so the widget test never touches the network. Records the
+/// amount passed to each call so tests can assert Fixed vs Open requests.
 class FakeMerchantRepository implements MerchantRepository {
   int qrCount = 0;
+  int? lastAmountPaise;
+  bool lastAmountPaiseWasSet = false;
 
   @override
   Future<Merchant> enableMerchantMode(String accountId, {String? displayName}) async {
@@ -26,27 +29,48 @@ class FakeMerchantRepository implements MerchantRepository {
   @override
   Future<QrPayload> generateQrPayload(String accountId, {int? amountPaise}) async {
     qrCount++;
+    lastAmountPaise = amountPaise;
+    lastAmountPaiseWasSet = true;
     return QrPayload(
       v: 1,
       merchantId: 'MER-ABC123DEF456',
       nonce: 'nonce-$qrCount',
-      ts: '2026-07-14T00:00:00.000Z',
+      ts: 1752451200,
       amountPaise: amountPaise,
     );
   }
 }
 
-void main() {
-  testWidgets('dashboard shows Merchant ID and generates a placeholder QR payload',
-      (tester) async {
-    final fake = FakeMerchantRepository();
-    final container = ProviderContainer(
-      overrides: [merchantRepositoryProvider.overrideWithValue(fake)],
-    );
-    addTearDown(container.dispose);
+Future<ProviderContainer> _enabledContainer(FakeMerchantRepository fake) async {
+  final container = ProviderContainer(
+    overrides: [merchantRepositoryProvider.overrideWithValue(fake)],
+  );
+  await container.read(merchantModeProvider.notifier).enable();
+  return container;
+}
 
-    // Enable Merchant Mode so the dashboard has a merchant to render.
-    await container.read(merchantModeProvider.notifier).enable();
+/// The dashboard (hero card + Payment Request card + Generated Request card +
+/// Recent Requests) is taller than the default 800x600 test surface; a plain
+/// `ListView` only builds children within its viewport + cache extent, so
+/// without a larger surface the lower sections are never built and lookups
+/// return zero — not "found but off-screen" (same fix as
+/// wallet_funding_flow_test.dart's `_useTallSurface`).
+void _useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1080, 4680);
+  tester.view.devicePixelRatio = 3.0;
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+}
+
+void main() {
+  testWidgets('Merchant dashboard renders correctly: Merchant ID, wallet buckets, Payment Request section',
+      (tester) async {
+    _useTallSurface(tester);
+    final fake = FakeMerchantRepository();
+    final container = await _enabledContainer(fake);
+    addTearDown(container.dispose);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -56,22 +80,106 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Merchant ID is displayed.
+    expect(find.text('Merchant Dashboard'), findsOneWidget);
     expect(find.byKey(const Key('merchant-id')), findsOneWidget);
     expect(find.text('MER-ABC123DEF456'), findsOneWidget);
-
-    // Wallet buckets shown, both zero.
     expect(find.byKey(const Key('pending-amount')), findsOneWidget);
     expect(find.byKey(const Key('settled-amount')), findsOneWidget);
 
-    // No payload until the button is pressed.
+    // Payment Request section: amount field, hint, and both action buttons.
+    expect(find.byKey(const Key('payment-amount-field')), findsOneWidget);
+    expect(find.text('Leave empty to let the customer enter the amount.'), findsOneWidget);
+    expect(find.byKey(const Key('request-fixed-amount-button')), findsOneWidget);
+    expect(find.byKey(const Key('request-open-amount-button')), findsOneWidget);
+
+    // No Generated Payment Request card until a request is made.
     expect(find.byKey(const Key('qr-payload')), findsNothing);
 
-    await tester.tap(find.byKey(const Key('generate-qr-button')));
+    // Recent Requests placeholder rows.
+    expect(find.text('Recent Requests'), findsOneWidget);
+    expect(find.text('₹250'), findsOneWidget);
+    expect(find.text('₹99'), findsOneWidget);
+    expect(find.text('Open Amount'), findsOneWidget);
+  });
+
+  testWidgets('Merchant can create a Fixed Amount Request; QR displays the requested amount',
+      (tester) async {
+    _useTallSurface(tester);
+    final fake = FakeMerchantRepository();
+    final container = await _enabledContainer(fake);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: MerchantDashboardScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('qr-payload')), findsOneWidget);
-    expect(find.textContaining('MER-ABC123DEF456'), findsWidgets);
+    await tester.enterText(find.byKey(const Key('payment-amount-field')), '250');
+    await tester.tap(find.byKey(const Key('request-fixed-amount-button')));
+    await tester.pumpAndSettle();
+
     expect(fake.qrCount, 1);
+    expect(fake.lastAmountPaise, 25000);
+
+    expect(find.byKey(const Key('qr-payload')), findsOneWidget);
+    expect(find.byKey(const Key('generated-amount-label')), findsOneWidget);
+    expect(find.text('₹250'), findsWidgets); // requested amount + recent-requests seed row
+    expect(find.text('Requested Amount'), findsOneWidget);
+    expect(find.byKey(const Key('generated-status')), findsOneWidget);
+    expect(find.text('Generated'), findsWidgets);
+  });
+
+  testWidgets('Merchant can create an Open Amount Request without entering an amount',
+      (tester) async {
+    _useTallSurface(tester);
+    final fake = FakeMerchantRepository();
+    final container = await _enabledContainer(fake);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: MerchantDashboardScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Amount field left empty.
+    await tester.tap(find.byKey(const Key('request-open-amount-button')));
+    await tester.pumpAndSettle();
+
+    expect(fake.qrCount, 1);
+    expect(fake.lastAmountPaiseWasSet, true);
+    expect(fake.lastAmountPaise, isNull);
+
+    expect(find.byKey(const Key('qr-payload')), findsOneWidget);
+    expect(find.text('Payment Type'), findsOneWidget);
+    expect(find.byKey(const Key('generated-amount-label')), findsOneWidget);
+  });
+
+  testWidgets('Requesting a Fixed Amount without entering an amount shows a validation error',
+      (tester) async {
+    _useTallSurface(tester);
+    final fake = FakeMerchantRepository();
+    final container = await _enabledContainer(fake);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: MerchantDashboardScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('request-fixed-amount-button')));
+    await tester.pumpAndSettle();
+
+    expect(fake.qrCount, 0);
+    expect(find.text('Enter an amount to request a fixed payment'), findsOneWidget);
+    expect(find.byKey(const Key('qr-payload')), findsNothing);
   });
 }

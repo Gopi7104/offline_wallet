@@ -1,4 +1,5 @@
 import 'package:offline_wallet/core/money.dart';
+import 'package:offline_wallet/core/result.dart';
 
 /// Token — digital cash entity (mirrors backend ARCHITECTURE.md §4.2, §4.3).
 /// Immutable. Fields: id, denomination, ownerId, issuedAt, expiry, status, signature.
@@ -34,6 +35,38 @@ class Token {
     status: newStatus,
     bankSignature: bankSignature,
   );
+
+  /// Wire form for BLE token transfer (Task 8). Compact keys; amounts in paise;
+  /// timestamps epoch seconds; status by enum name; `sig` is the placeholder
+  /// bank signature (Task 9 replaces it with a real Ed25519 issuer signature).
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'denom': denomination.paise,
+    'owner': ownerId,
+    'iat': issuedAt.millisecondsSinceEpoch ~/ 1000,
+    'exp': expiry.millisecondsSinceEpoch ~/ 1000,
+    'status': status.name,
+    'sig': bankSignature,
+  };
+
+  static Token fromJson(Map<String, dynamic> json) {
+    final denom = switch (Money.fromPaise(json['denom'] as int)) {
+      Ok(:final value) => value,
+      Err() => Money.zero(),
+    };
+    return Token(
+      id: json['id'] as String,
+      denomination: denom,
+      ownerId: json['owner'] as String,
+      issuedAt: DateTime.fromMillisecondsSinceEpoch((json['iat'] as int) * 1000),
+      expiry: DateTime.fromMillisecondsSinceEpoch((json['exp'] as int) * 1000),
+      status: TokenStatus.values.firstWhere(
+        (s) => s.name == json['status'],
+        orElse: () => TokenStatus.inWallet,
+      ),
+      bankSignature: json['sig'] as String,
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
