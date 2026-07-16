@@ -58,3 +58,181 @@ Start here, in order:
 ## Status
 
 Design phase complete (Phase 0). Implementation begins at **Phase 1 — Foundation** (crypto, identity, scaffolding). See [ROADMAP.md](docs/ROADMAP.md) and [TODO.md](docs/TODO.md).
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+**Backend:**
+- Node.js ≥ 20
+- PostgreSQL 13+
+- npm/yarn
+
+**Mobile:**
+- Flutter ≥ 3.22.0 (Dart ≥ 3.4.0)
+- Android 10+ SDK / Xcode 14+ for iOS
+- Android emulator or physical device
+
+### Setup
+
+#### 1. Backend
+
+```bash
+cd backend
+
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env
+
+# Update .env with your PostgreSQL connection
+# Default: postgres://wallet:wallet@localhost:5432/offline_wallet
+
+# Run database migrations
+npm run migrate
+
+# (Optional) Seed dev data
+# See tests/ for example data loaders
+```
+
+#### 2. Mobile
+
+```bash
+cd mobile
+
+# Get Flutter dependencies
+flutter pub get
+
+# (Optional) Generate app icons
+# dart run flutter_launcher_icons
+
+# (Optional) Run code generation (for future features like Drift, Riverpod)
+# flutter pub run build_runner build
+```
+
+### Running the Project
+
+#### Backend (Development)
+
+```bash
+cd backend
+
+# Start dev server with hot reload (port 3000)
+npm run dev
+
+# Build production bundle
+npm run build
+npm start
+
+# Run tests
+npm test
+
+# Type-check
+npm run typecheck
+```
+
+#### Mobile (Android)
+
+```bash
+cd mobile
+
+# List connected devices
+flutter devices
+
+# Run on default device
+flutter run
+
+# Run with debug logging
+flutter run -v
+
+# Build APK
+flutter build apk
+
+# Run tests
+flutter test
+```
+
+#### Mobile (iOS)
+
+```bash
+cd mobile
+
+# Install pod dependencies (macOS/iOS only)
+cd ios
+pod install
+cd ..
+
+# Run on simulator
+flutter run -d iPhone
+
+# Run on physical device (requires provisioning profile)
+flutter run -d <device-id>
+
+# Build IPA
+flutter build ipa
+```
+
+### Development Workflow
+
+1. **Backend changes:** `npm run dev` watches TypeScript files; hot-reload on save.
+2. **Mobile changes:** `flutter run` watches Dart files; hot-reload on save.
+3. **Database migrations:** Create `.sql` files in `backend/migrations/` and run `npm run migrate`.
+4. **Testing backend:** `npm test` runs Jest tests in `backend/tests/`.
+5. **Testing mobile:** `flutter test` runs tests in `mobile/test/`.
+
+### Project Structure
+
+```
+backend/
+  src/              TypeScript source (domain, app, platform layers)
+  migrations/       Database schema + data migrations
+  tests/            Integration & unit tests
+  jest.config.js    Test configuration
+  package.json      Dependencies & scripts
+
+mobile/
+  lib/              Flutter app (features, domain, data, platform)
+  test/             Unit & widget tests
+  integration_test/ End-to-end tests
+  android/          Android-specific code
+  ios/              iOS-specific code
+  pubspec.yaml      Dependencies & configuration
+
+docs/
+  PROJECT_VISION.md    High-level vision & design principles
+  REQUIREMENTS.md      Functional & non-functional requirements
+  ARCHITECTURE.md      System design & API contracts
+  PAYMENT_PROTOCOL.md  Offline payment BLE/QR protocol
+  SECURITY.md          Threat model & key management
+  ROADMAP.md           Phase-based delivery plan
+  TODO.md              Current backlog & open questions
+
+CLAUDE.md             Development guidance for Claude Code
+```
+
+### Troubleshooting
+
+**Backend won't start:**
+- Check PostgreSQL is running: `psql -h localhost -U wallet -d offline_wallet`
+- Verify .env DATABASE_URL is correct
+- Run migrations: `npm run migrate`
+
+**Mobile build fails:**
+- Clear build cache: `flutter clean`
+- Get dependencies: `flutter pub get`
+- Check Flutter is installed: `flutter --version`
+- For iOS: `cd ios && pod repo update && pod install && cd ..`
+
+**Tests fail:**
+- Backend: ensure test DB exists (migrations auto-create `offline_wallet_test`)
+- Mobile: run `flutter pub get` before `flutter test`
+
+### Next Steps
+
+- Read [docs/PROJECT_VISION.md](docs/PROJECT_VISION.md) for architecture overview
+- Check [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for API contracts and data model
+- See [CLAUDE.md](CLAUDE.md) for development guidelines
+- Track progress in [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/TODO.md](docs/TODO.md)
