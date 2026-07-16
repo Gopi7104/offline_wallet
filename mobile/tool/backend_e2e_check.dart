@@ -19,9 +19,10 @@ void _check(bool ok, String label) {
 Future<void> main(List<String> args) async {
   final baseUrl = args.isNotEmpty ? args.first : 'http://localhost:3000';
   const account = 'e2e-merchant';
+  Future<Map<String, String>> identity() async => {'x-account-id': account};
 
-  final merchant = MerchantApiClientImpl(baseUrl: baseUrl, accountId: account);
-  final wallet = WalletApiClientImpl(baseUrl: baseUrl, accountId: account);
+  final merchant = MerchantApiClientImpl(baseUrl: baseUrl, identity: identity);
+  final wallet = WalletApiClientImpl(baseUrl: baseUrl, identity: identity);
 
   final merchantIdPattern = RegExp(r'^MER-[0-9A-F]{12}$');
 
@@ -36,12 +37,8 @@ Future<void> main(List<String> args) async {
   _check(fetched != null && fetched.merchantId == enabled.merchantId,
       'getMerchant() returns the same Merchant ID (idempotent)');
 
-  final qr1 = await merchant.generateQr(amountPaise: 12345);
-  _check(qr1.merchantId == enabled.merchantId && qr1.amountPaise == 12345 && qr1.nonce.isNotEmpty,
-      'generateQr() returns a payload bound to the merchant with the amount');
-
-  final qr2 = await merchant.generateQr();
-  _check(qr2.nonce != qr1.nonce, 'each QR gets a fresh nonce');
+  // Payment QR generation is offline-only now (BLE Receive Payment screen) —
+  // no backend endpoint to check here.
 
   // --- Wallet (proves the pre-existing wallet slice still works too) ---
   final w0 = await wallet.getWallet();

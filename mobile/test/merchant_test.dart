@@ -47,13 +47,22 @@ void main() {
         v: 1,
         merchantId: 'MER-1',
         nonce: 'n',
-        ts: 't',
+        ts: 1752480000,
         amountPaise: 100,
       );
       expect(p.v, 1);
+      expect(p.typ, 'offer-req');
       expect(p.merchantId, 'MER-1');
       expect(p.nonce, 'n');
+      expect(p.ts, 1752480000);
       expect(p.amountPaise, 100);
+    });
+
+    test('isFixedAmount reflects a Fixed vs Open Amount Payment Request (Task 6.7)', () {
+      const fixed = QrPayload(v: 1, merchantId: 'MER-1', nonce: 'n', ts: 1, amountPaise: 25000);
+      const open = QrPayload(v: 1, merchantId: 'MER-1', nonce: 'n', ts: 1);
+      expect(fixed.isFixedAmount, true);
+      expect(open.isFixedAmount, false);
     });
   });
 }

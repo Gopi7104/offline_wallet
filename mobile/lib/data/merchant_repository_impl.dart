@@ -29,18 +29,6 @@ class MerchantRepositoryImpl implements MerchantRepository {
     return _cached;
   }
 
-  @override
-  Future<QrPayload> generateQrPayload(String accountId, {int? amountPaise}) async {
-    final response = await apiClient.generateQr(amountPaise: amountPaise);
-    return QrPayload(
-      v: response.v,
-      merchantId: response.merchantId,
-      nonce: response.nonce,
-      ts: response.ts,
-      amountPaise: response.amountPaise,
-    );
-  }
-
   Merchant _toDomain(MerchantResponse r) {
     return Merchant(
       merchantId: r.merchantId,

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/data/merchant_api_client_impl.dart';
-import 'package:offline_wallet/data/payment_api_client_impl.dart';
 import 'package:offline_wallet/data/wallet_api_client_impl.dart';
 
 // On-device networking smoke test (Task 4.1). Runs on the PHYSICAL device and
@@ -16,12 +15,11 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const account = 'device-smoke';
+  Future<Map<String, String>> identityFor(String accountId) async => {'x-account-id': accountId};
   final wallet =
-      WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: account);
+      WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
   final merchant =
-      MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: account);
-  final payment =
-      PaymentApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: 'device-customer');
+      MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
   final merchantIdPattern = RegExp(r'^MER-[0-9A-F]{12}$');
 
   // Fail fast with a clear error instead of hanging if the device cannot reach
@@ -49,17 +47,8 @@ void main() {
     expect(dash, isNotNull);
     expect(dash!.merchantId, enabled.merchantId);
 
-    // ✓ Generate QR endpoint works
-    final qr = await guarded('POST /v1/merchant/qr', merchant.generateQr(amountPaise: 12345));
-    expect(qr.merchantId, enabled.merchantId);
-    expect(qr.amountPaise, 12345);
-    expect(qr.nonce.isNotEmpty, isTrue);
-
-    // ✓ Customer Pay: payment request validates the merchant + amount (Task 5)
-    final pr = await guarded('POST /v1/payment/request',
-        payment.createPaymentRequest(merchantId: enabled.merchantId, amountPaise: 2500));
-    expect(pr.merchantId, enabled.merchantId);
-    expect(pr.amountPaise, 2500);
-    expect(pr.status, 'CREATED');
+    // Payment QR generation + Customer Pay are entirely offline over BLE (no
+    // backend call) — see merchant_receive_controller.dart /
+    // payment_session_controller.dart.
   });
 }

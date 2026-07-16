@@ -1,61 +1,118 @@
 import 'package:flutter/material.dart';
-import 'package:offline_wallet/domain/payment.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:offline_wallet/components/components.dart';
+import 'package:offline_wallet/theme/theme.dart';
 
-/// Success screen — the placeholder payment request was created and validated by
-/// the backend. Task 5: NO value has moved yet (the offline coin transfer +
-/// settlement land in later tasks); this confirms the request was accepted.
-class PaymentSuccessScreen extends StatelessWidget {
-  final PaymentRequest request;
-  const PaymentSuccessScreen({super.key, required this.request});
+/// Success screen — the offline token transfer completed: the customer's
+/// tokens were handed to the merchant over BLE and the merchant returned a
+/// signed TRANSFER_COMPLETE. Value has moved (unlike the old backend
+/// placeholder); settlement happens later (Task 9).
+class PaymentSuccessScreen extends StatefulWidget {
+  final String merchantId;
+  final int amountPaise;
+  final int tokenCount;
+
+  const PaymentSuccessScreen({
+    super.key,
+    required this.merchantId,
+    required this.amountPaise,
+    required this.tokenCount,
+  });
+
+  @override
+  State<PaymentSuccessScreen> createState() => _PaymentSuccessScreenState();
+}
+
+class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 600))
+    ..forward();
+
+  String get _amountLabel => '₹${(widget.amountPaise / 100).toStringAsFixed(2)}';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copyReceipt() async {
+    final text = 'Offline Wallet receipt\n'
+        'Merchant: ${widget.merchantId}\n'
+        'Amount: $_amountLabel\n'
+        'Tokens: ${widget.tokenCount}\n'
+        'Status: PAID (offline)';
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Receipt copied to clipboard'),
+          duration: Duration(seconds: 2)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Success')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 16),
-            Icon(Icons.check_circle, size: 96, color: scheme.primary),
-            const SizedBox(height: 16),
-            Text(
-              'Payment request created',
-              key: const Key('success-title'),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _row(context, 'Merchant', request.merchantName,
-                        const Key('success-merchant-name')),
-                    const Divider(height: 24),
-                    _row(context, 'Amount', request.amount.format(),
-                        const Key('success-amount')),
-                    const Divider(height: 24),
-                    _row(context, 'Status', request.status,
-                        const Key('success-status')),
-                    const Divider(height: 24),
-                    _row(context, 'Request', request.paymentRequestId,
-                        const Key('success-request-id')),
-                  ],
-                ),
+      appBar: AppBar(title: const Text('Success'), automaticallyImplyLeading: false),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        children: [
+          const SizedBox(height: AppSpacing.base),
+          Center(
+            child: ScaleTransition(
+              scale: CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+              child: Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.15),
+                    shape: BoxShape.circle),
+                child: const Icon(Symbols.check_circle_rounded,
+                    size: 64, color: AppColors.success),
               ),
             ),
-            const Spacer(),
-            FilledButton(
-              key: const Key('success-done'),
-              onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-              child: const Text('Done'),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Payment sent',
+            key: const Key('success-title'),
+            textAlign: TextAlign.center,
+            style: AppTypography.textTheme.headlineSmall,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.base),
+              child: Column(
+                children: [
+                  _row(context, 'Merchant', widget.merchantId,
+                      const Key('success-merchant-name')),
+                  const Divider(height: AppSpacing.xl),
+                  _row(context, 'Amount', _amountLabel, const Key('success-amount')),
+                  const Divider(height: AppSpacing.xl),
+                  _row(context, 'Tokens sent', '${widget.tokenCount}',
+                      const Key('success-token-count')),
+                  const Divider(height: AppSpacing.xl),
+                  _row(context, 'Status', 'Paid (offline)', const Key('success-status')),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.base),
+          SecondaryButton(
+              label: 'Share Receipt',
+              icon: Symbols.share_rounded,
+              onPressed: _copyReceipt),
+          const SizedBox(height: AppSpacing.xxxl),
+          PrimaryButton(
+            key: const Key('success-done'),
+            label: 'Done',
+            onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+          ),
+        ],
       ),
     );
   }
@@ -64,13 +121,13 @@ class PaymentSuccessScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
+        Text(label, style: AppTypography.textTheme.bodyMedium),
         Flexible(
           child: Text(
             value,
             key: valueKey,
             textAlign: TextAlign.right,
-            style: Theme.of(context).textTheme.titleMedium,
+            style: AppTypography.textTheme.titleMedium,
           ),
         ),
       ],

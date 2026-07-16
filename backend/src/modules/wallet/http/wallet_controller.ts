@@ -14,7 +14,8 @@ export class WalletController {
 
   /**
    * GET /v1/wallet — fetch current balance.
-   * Auth: session required (stubbed here; Task 3 adds Firebase exchange).
+   * Auth: session required — account identity resolved from the Firebase
+   * ID token by resolveAccountId (FR-ID-01).
    */
   async getWallet(req: Request, res: Response): Promise<void> {
     try {
@@ -79,9 +80,8 @@ export class WalletController {
   }
 
   private extractAccountId(req: Request): string {
-    // Stubbed: in Task 3, this extracts from the session/JWT.
-    // For now, use a header or a test account.
-    return (req.headers['x-account-id'] as string) || 'test-account-1';
+    // Set by resolveAccountId (auth_middleware.ts) ahead of every /v1 route.
+    return req.accountId ?? 'test-account-1';
   }
 
   private handleError(error: unknown, res: Response): void {

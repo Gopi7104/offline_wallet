@@ -1,47 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:offline_wallet/components/components.dart';
 import 'package:offline_wallet/domain/merchant.dart';
+import 'package:offline_wallet/theme/theme.dart';
 import 'merchant_provider.dart';
+import 'merchant_receive_screen.dart';
+import 'pending_settlement_provider.dart';
+import 'settlement_screen.dart';
 
-/// Merchant dashboard (FR-MER-01/02). Shows the Merchant ID and the two wallet
-/// buckets (received-pending vs settled), and generates a placeholder payment
-/// QR payload. No BLE, QR rendering, settlement or crypto in Task 4.
-class MerchantDashboardScreen extends ConsumerStatefulWidget {
+/// Merchant dashboard (FR-MER-01/02). Shows the Merchant ID, the two wallet
+/// buckets, Pending Settlement, and the way in to the single payment flow:
+/// Receive Payment (BLE) — Fixed Amount or Open Cash, QR shown, BLE
+/// advertising started, all from that one screen.
+class MerchantDashboardScreen extends ConsumerWidget {
   const MerchantDashboardScreen({super.key});
 
   @override
-  ConsumerState<MerchantDashboardScreen> createState() =>
-      _MerchantDashboardScreenState();
-}
-
-class _MerchantDashboardScreenState
-    extends ConsumerState<MerchantDashboardScreen> {
-  QrPayload? _payload;
-  bool _generating = false;
-  String? _error;
-
-  Future<void> _onGenerateQr() async {
-    setState(() {
-      _generating = true;
-      _error = null;
-    });
-    try {
-      final repo = ref.read(merchantRepositoryProvider);
-      final payload = await repo.generateQrPayload(kMerchantAccountId);
-      setState(() => _payload = payload);
-    } catch (e) {
-      setState(() => _error = '$e');
-    } finally {
-      setState(() => _generating = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final merchant = ref.watch(merchantModeProvider).valueOrNull;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Merchant Mode')),
+      appBar: AppBar(title: const Text('Merchant Dashboard')),
       body: merchant == null
           ? const Center(
               child: Text(
@@ -50,130 +30,185 @@ class _MerchantDashboardScreenState
               ),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.base),
               children: [
-                _MerchantIdCard(merchant: merchant),
-                const SizedBox(height: 16),
-                _WalletCard(wallet: merchant.wallet),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  key: const Key('generate-qr-button'),
-                  onPressed: _generating ? null : _onGenerateQr,
-                  icon: const Icon(Icons.qr_code_2),
-                  label: const Text('Generate QR'),
+                _MerchantHeroCard(merchant: merchant),
+                const SizedBox(height: AppSpacing.xl),
+                SecondaryButton(
+                  key: const Key('open-ble-merchant-button'),
+                  label: 'Receive Payment (BLE)',
+                  icon: Symbols.contactless_rounded,
+                  onPressed: () => Navigator.of(context).push(
+                    sharedAxisRoute(const MerchantReceiveScreen()),
+                  ),
                 ),
-                if (_generating)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16),
-                    child: Center(
-                      child: CircularProgressIndicator(key: Key('qr-spinner')),
-                    ),
-                  ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text('QR failed: $_error', key: const Key('qr-error')),
-                  ),
-                if (_payload != null) _QrPayloadCard(payload: _payload!),
+                const SizedBox(height: AppSpacing.xl),
+                _PendingSettlementSection(merchant: merchant),
               ],
             ),
     );
   }
 }
 
-class _MerchantIdCard extends StatelessWidget {
+class _MerchantHeroCard extends StatelessWidget {
   final Merchant merchant;
-  const _MerchantIdCard({required this.merchant});
+  const _MerchantHeroCard({required this.merchant});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Merchant ID', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 4),
-            SelectableText(
-              merchant.merchantId,
-              key: const Key('merchant-id'),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              merchant.displayName,
-              key: const Key('merchant-name'),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.xlRadius,
+        gradient: const LinearGradient(
+          colors: AppColors.heroGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'MERCHANT ID',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    SelectableText(
+                      merchant.merchantId,
+                      key: const Key('merchant-id'),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      merchant.displayName,
+                      key: const Key('merchant-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.base),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Symbols.storefront_rounded, color: Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: _heroStat(
+                  'Pending Settlement',
+                  merchant.wallet.pendingSettlement.format(),
+                  const Key('pending-amount'),
+                ),
+              ),
+              Container(width: 1, height: 36, color: Colors.white24),
+              const SizedBox(width: AppSpacing.base),
+              Expanded(
+                child: _heroStat(
+                  'Settled',
+                  merchant.wallet.settled.format(),
+                  const Key('settled-amount'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
-}
 
-class _WalletCard extends StatelessWidget {
-  final MerchantWallet wallet;
-  const _WalletCard({required this.wallet});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _row(context, 'Received (pending settlement)',
-                wallet.pendingSettlement.format(), const Key('pending-amount')),
-            const SizedBox(height: 8),
-            _row(context, 'Settled', wallet.settled.format(),
-                const Key('settled-amount')),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(BuildContext context, String label, String value, Key valueKey) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _heroStat(String label, String value, Key valueKey) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        Text(value,
-            key: valueKey, style: Theme.of(context).textTheme.titleMedium),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          key: valueKey,
+          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+        ),
       ],
     );
   }
 }
 
-class _QrPayloadCard extends StatelessWidget {
-  final QrPayload payload;
-  const _QrPayloadCard({required this.payload});
+/// Pending Settlement section (Task 9). Shown only when the merchant has
+/// received offline payments awaiting settlement. Routes to the Settlement
+/// screen, where the tokens are redeemed at the backend.
+class _PendingSettlementSection extends ConsumerWidget {
+  final Merchant merchant;
+  const _PendingSettlementSection({required this.merchant});
 
   @override
-  Widget build(BuildContext context) {
-    // Placeholder: display the payload as text. Real QR rendering (qr_flutter)
-    // arrives with the offline receive task.
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(pendingSettlementProvider);
+    if (!pending.hasPending) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       child: Card(
+        key: const Key('pending-settlement-card'),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Payment QR payload (placeholder)',
-                  style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 8),
-              SelectableText(
-                'v: ${payload.v}\n'
-                'merchantId: ${payload.merchantId}\n'
-                'nonce: ${payload.nonce}\n'
-                'ts: ${payload.ts}'
-                '${payload.amountPaise != null ? '\namount(paise): ${payload.amountPaise}' : ''}',
-                key: const Key('qr-payload'),
+              Row(
+                children: [
+                  const Icon(Symbols.pending_actions_rounded, color: AppColors.warning),
+                  const SizedBox(width: AppSpacing.m),
+                  Expanded(
+                    child: Text('Pending Settlement', style: AppTypography.textTheme.titleLarge),
+                  ),
+                  Text(
+                    pending.pendingAmount.format(),
+                    key: const Key('dashboard-pending-settlement-amount'),
+                    style: AppTypography.textTheme.titleMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${pending.pendingCount} token(s) received offline, ready to settle.',
+                style: AppTypography.textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.l),
+              PrimaryButton(
+                key: const Key('open-settlement-button'),
+                label: 'Settle Received Payments',
+                icon: Symbols.account_balance_rounded,
+                onPressed: () => Navigator.of(context).push(
+                  sharedAxisRoute(SettlementScreen(merchantId: merchant.merchantId)),
+                ),
               ),
             ],
           ),

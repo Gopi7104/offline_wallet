@@ -5,11 +5,10 @@ import 'package:offline_wallet/domain/merchant.dart';
 import 'package:offline_wallet/domain/merchant_repository.dart';
 import 'package:offline_wallet/features/receive/merchant_dashboard_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_provider.dart';
+import 'package:offline_wallet/features/receive/merchant_receive_screen.dart';
 
 /// In-memory fake so the widget test never touches the network.
 class FakeMerchantRepository implements MerchantRepository {
-  int qrCount = 0;
-
   @override
   Future<Merchant> enableMerchantMode(String accountId, {String? displayName}) async {
     return Merchant(
@@ -22,31 +21,22 @@ class FakeMerchantRepository implements MerchantRepository {
 
   @override
   Future<Merchant?> getMerchant(String accountId) async => null;
+}
 
-  @override
-  Future<QrPayload> generateQrPayload(String accountId, {int? amountPaise}) async {
-    qrCount++;
-    return QrPayload(
-      v: 1,
-      merchantId: 'MER-ABC123DEF456',
-      nonce: 'nonce-$qrCount',
-      ts: '2026-07-14T00:00:00.000Z',
-      amountPaise: amountPaise,
-    );
-  }
+Future<ProviderContainer> _enabledContainer(FakeMerchantRepository fake) async {
+  final container = ProviderContainer(
+    overrides: [merchantRepositoryProvider.overrideWithValue(fake)],
+  );
+  await container.read(merchantModeProvider.notifier).enable();
+  return container;
 }
 
 void main() {
-  testWidgets('dashboard shows Merchant ID and generates a placeholder QR payload',
+  testWidgets('Merchant dashboard renders the Merchant ID, wallet buckets, and BLE receive nav',
       (tester) async {
     final fake = FakeMerchantRepository();
-    final container = ProviderContainer(
-      overrides: [merchantRepositoryProvider.overrideWithValue(fake)],
-    );
+    final container = await _enabledContainer(fake);
     addTearDown(container.dispose);
-
-    // Enable Merchant Mode so the dashboard has a merchant to render.
-    await container.read(merchantModeProvider.notifier).enable();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -56,22 +46,47 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Merchant ID is displayed.
+    expect(find.text('Merchant Dashboard'), findsOneWidget);
     expect(find.byKey(const Key('merchant-id')), findsOneWidget);
     expect(find.text('MER-ABC123DEF456'), findsOneWidget);
-
-    // Wallet buckets shown, both zero.
     expect(find.byKey(const Key('pending-amount')), findsOneWidget);
     expect(find.byKey(const Key('settled-amount')), findsOneWidget);
 
-    // No payload until the button is pressed.
-    expect(find.byKey(const Key('qr-payload')), findsNothing);
+    // The one payment flow: Receive Payment (BLE) — Fixed Amount or Open
+    // Cash, QR + BLE advertising all live on that screen (no dashboard QR
+    // generation feature anymore).
+    expect(find.byKey(const Key('open-ble-merchant-button')), findsOneWidget);
+  });
 
-    await tester.tap(find.byKey(const Key('generate-qr-button')));
+  testWidgets('Receive Payment (BLE) button navigates to the BLE receive screen', (tester) async {
+    final fake = FakeMerchantRepository();
+    final container = await _enabledContainer(fake);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: MerchantDashboardScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('qr-payload')), findsOneWidget);
-    expect(find.textContaining('MER-ABC123DEF456'), findsWidgets);
-    expect(fake.qrCount, 1);
+    await tester.tap(find.byKey(const Key('open-ble-merchant-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MerchantReceiveScreen), findsOneWidget);
+  });
+
+  testWidgets('shows a placeholder when Merchant Mode is not enabled', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [merchantRepositoryProvider.overrideWithValue(FakeMerchantRepository())],
+        child: const MaterialApp(home: MerchantDashboardScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('merchant-not-enabled')), findsOneWidget);
+    expect(find.byKey(const Key('open-ble-merchant-button')), findsNothing);
   });
 }

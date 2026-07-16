@@ -66,34 +66,6 @@ describe('Merchant Mode (Task 4: vertical slice; Identity context per Architectu
     it('getByAccountId returns null when not enabled', async () => {
       expect(await service.getByAccountId('nobody')).toBeNull();
     });
-
-    it('generateQrPayload returns null when not enabled', async () => {
-      expect(await service.generateQrPayload('nobody')).toBeNull();
-    });
-
-    it('generateQrPayload returns a placeholder payload bound to the merchant', async () => {
-      const m = await service.enableMerchantMode('dave');
-      const payload = await service.generateQrPayload('dave');
-      expect(payload).not.toBeNull();
-      expect(payload!.v).toBe(1);
-      expect(payload!.merchantId).toBe(m.merchantId);
-      expect(payload!.nonce).toBeTruthy();
-      expect(typeof payload!.ts).toBe('string');
-      expect(payload!.amountPaise).toBeUndefined();
-    });
-
-    it('generateQrPayload includes the requested amount when provided', async () => {
-      await service.enableMerchantMode('erin');
-      const payload = await service.generateQrPayload('erin', 20000);
-      expect(payload!.amountPaise).toBe(20000);
-    });
-
-    it('generates a fresh nonce per QR', async () => {
-      await service.enableMerchantMode('frank');
-      const a = await service.generateQrPayload('frank');
-      const b = await service.generateQrPayload('frank');
-      expect(a!.nonce).not.toBe(b!.nonce);
-    });
   });
 
   describe('HTTP integration (Merchant Mode API)', () => {
@@ -126,34 +98,6 @@ describe('Merchant Mode (Task 4: vertical slice; Identity context per Architectu
       const res = await request(app).get('/v1/merchant').set('x-account-id', 'judy');
       expect(res.status).toBe(200);
       expect(res.body.merchantId).toMatch(/^MER-[0-9A-F]{12}$/);
-    });
-
-    it('POST /v1/merchant/qr returns a placeholder payload once enabled', async () => {
-      const enable = await request(app).post('/v1/merchant/enable').set('x-account-id', 'ken');
-      const res = await request(app)
-        .post('/v1/merchant/qr')
-        .set('x-account-id', 'ken')
-        .send({ amount: 50000 });
-      expect(res.status).toBe(201);
-      expect(res.body.merchantId).toBe(enable.body.merchantId);
-      expect(res.body.nonce).toBeTruthy();
-      expect(res.body.amountPaise).toBe(50000);
-    });
-
-    it('POST /v1/merchant/qr returns 404 before Merchant Mode is enabled', async () => {
-      const res = await request(app).post('/v1/merchant/qr').set('x-account-id', 'laura');
-      expect(res.status).toBe(404);
-      expect(res.body.error).toBe('MERCHANT_NOT_ENABLED');
-    });
-
-    it('POST /v1/merchant/qr rejects a non-integer amount', async () => {
-      await request(app).post('/v1/merchant/enable').set('x-account-id', 'mike');
-      const res = await request(app)
-        .post('/v1/merchant/qr')
-        .set('x-account-id', 'mike')
-        .send({ amount: 1.5 });
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe('INVALID_AMOUNT');
     });
   });
 });

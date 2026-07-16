@@ -8,7 +8,4 @@ abstract interface class MerchantRepository {
 
   /// Fetch the merchant dashboard state, or null if Merchant Mode is off.
   Future<Merchant?> getMerchant(String accountId);
-
-  /// Generate a placeholder payment-QR payload (FR-PAY-01).
-  Future<QrPayload> generateQrPayload(String accountId, {int? amountPaise});
 }

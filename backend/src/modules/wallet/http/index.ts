@@ -1,20 +1,25 @@
 import { Router } from 'express';
 import { WalletService } from '../application/wallet_service';
-import { InMemoryWalletRepository } from '../infra/in_memory_wallet_repository';
+import { WalletRepository } from '../domain/wallet_repository';
+import { PgWalletRepository } from '../infra/pg_wallet_repository';
 import { WalletController } from './wallet_controller';
 import { IssuanceService } from '../../issuance/application/issuance_service';
-import { InMemoryTokenRepository } from '../../issuance/infra/in_memory_token_repository';
+import { TokenRepository } from '../../issuance/domain/token_repository';
+import { PgTokenRepository } from '../../issuance/infra/pg_token_repository';
+import { getPool } from '../../../platform/db';
 
 /**
  * Wallet (server shadow) context (ARCHITECTURE.md §4.1, §8).
- * Task 3: Wallet now stores digital cash tokens; balance is computed from them.
+ * PostgreSQL-backed by default (migrations 002/003); repositories are
+ * injectable so tests can swap in an in-memory double.
  * GET /wallet and POST /wallet/load remain the same external API.
  */
-export function registerWalletRoutes(router: Router): void {
-  // Composition root: in-memory repositories for Task 3.
-  // Later tasks: swap for PostgreSQL.
-  const tokenRepository = new InMemoryTokenRepository();
-  const walletRepository = new InMemoryWalletRepository();
+export function registerWalletRoutes(
+  router: Router,
+  deps?: { tokenRepository?: TokenRepository; walletRepository?: WalletRepository },
+): void {
+  const tokenRepository = deps?.tokenRepository ?? new PgTokenRepository(getPool());
+  const walletRepository = deps?.walletRepository ?? new PgWalletRepository(getPool());
 
   const issuanceService = new IssuanceService(tokenRepository);
   const walletService = new WalletService(walletRepository, issuanceService);

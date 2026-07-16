@@ -1,27 +1,36 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:offline_wallet/core/identity_headers.dart';
 import 'merchant_api_client.dart';
+
+/// See WalletApiClientImpl: an unreachable backend must fail fast, not hang
+/// the caller (e.g. Merchant Mode toggle stuck on "Enabling…").
+const Duration _connectTimeout = Duration(seconds: 5);
+const Duration _requestTimeout = Duration(seconds: 8);
 
 /// Concrete HTTP client for Merchant Mode endpoints. Uses dart:io HttpClient
 /// directly (consistent with WalletApiClientImpl); a production build would use
 /// a robust client such as dio/http.
 class MerchantApiClientImpl implements MerchantApiClient {
   final String baseUrl;
-  final String? accountId; // For the x-account-id header (stubbed auth, Task 4).
+  final IdentityHeaders? identity; // Firebase bearer token or x-account-id (FR-ID-01).
 
-  MerchantApiClientImpl({
-    required this.baseUrl,
-    this.accountId = 'test-account-1',
-  });
+  MerchantApiClientImpl({required this.baseUrl, this.identity});
+
+  Future<void> _addIdentityHeaders(HttpClientRequest request) async {
+    final headers = await identity?.call() ?? const {'x-account-id': 'test-account-1'};
+    headers.forEach(request.headers.set);
+  }
 
   @override
   Future<MerchantResponse> enable({String? displayName}) async {
     final url = Uri.parse('$baseUrl/v1/merchant/enable');
-    final request = await HttpClient().postUrl(url);
+    final client = HttpClient()..connectionTimeout = _connectTimeout;
+    final request = await client.postUrl(url).timeout(_requestTimeout);
     request.headers.contentType = ContentType.json;
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
+    await _addIdentityHeaders(request);
     request.write(jsonEncode(displayName == null ? {} : {'displayName': displayName}));
-    final response = await request.close();
+    final response = await request.close().timeout(_requestTimeout);
 
     if (response.statusCode != 201) {
       throw Exception('enable merchant failed: ${response.statusCode}');
@@ -33,9 +42,10 @@ class MerchantApiClientImpl implements MerchantApiClient {
   @override
   Future<MerchantResponse?> getMerchant() async {
     final url = Uri.parse('$baseUrl/v1/merchant');
-    final request = await HttpClient().getUrl(url);
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
-    final response = await request.close();
+    final client = HttpClient()..connectionTimeout = _connectTimeout;
+    final request = await client.getUrl(url).timeout(_requestTimeout);
+    await _addIdentityHeaders(request);
+    final response = await request.close().timeout(_requestTimeout);
 
     if (response.statusCode == 404) {
       await response.drain<void>();
@@ -46,21 +56,5 @@ class MerchantApiClientImpl implements MerchantApiClient {
     }
     final body = await utf8.decoder.bind(response).join();
     return MerchantResponse.fromJson(jsonDecode(body) as Map<String, dynamic>);
-  }
-
-  @override
-  Future<QrResponse> generateQr({int? amountPaise}) async {
-    final url = Uri.parse('$baseUrl/v1/merchant/qr');
-    final request = await HttpClient().postUrl(url);
-    request.headers.contentType = ContentType.json;
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
-    request.write(jsonEncode(amountPaise == null ? {} : {'amount': amountPaise}));
-    final response = await request.close();
-
-    if (response.statusCode != 201) {
-      throw Exception('generateQr failed: ${response.statusCode}');
-    }
-    final body = await utf8.decoder.bind(response).join();
-    return QrResponse.fromJson(jsonDecode(body) as Map<String, dynamic>);
   }
 }

@@ -1,11 +1,13 @@
 plugins {
     id("com.android.application")
+    // Firebase Authentication (Task 6.5 follow-up): reads google-services.json below.
+    id("com.google.gms.google-services")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.offline_wallet"
+    namespace = "com.gopi.offlinewallet"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +17,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.offline_wallet"
+        // Matches the Firebase Android app registered in google-services.json.
+        applicationId = "com.gopi.offlinewallet"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
