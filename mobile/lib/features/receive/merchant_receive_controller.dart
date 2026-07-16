@@ -12,6 +12,7 @@ import 'package:offline_wallet/domain/transfer.dart';
 import 'package:offline_wallet/platform/ble/ble_permission_service.dart';
 
 import 'ble_merchant_provider.dart';
+import 'pending_settlement_provider.dart';
 
 /// Stub merchant id for the backend-free BLE receive flow (real merchant
 /// registration needs the backend, which is out of scope for Task 8). The QR
@@ -79,6 +80,12 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
   final BlePermissionService _permissions;
   final String _merchantId;
 
+  /// Invoked once, when a transfer is accepted, with the stored tokens. The
+  /// provider wires this to the pending-settlement store so the merchant can
+  /// later redeem them from the Settlement screen (Task 9). Defaults to a
+  /// no-op so existing unit tests can construct the controller directly.
+  final void Function(List<Token> tokens)? _onTokensReceived;
+
   StreamSubscription<String?>? _deviceSub;
   StreamSubscription<BleMessage>? _msgSub;
   bool _started = false;
@@ -91,9 +98,11 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
     required BlePeripheralTransport transport,
     required BlePermissionService permissions,
     String merchantId = kBleMerchantId,
+    void Function(List<Token> tokens)? onTokensReceived,
   })  : _transport = transport,
         _permissions = permissions,
         _merchantId = merchantId,
+        _onTokensReceived = onTokensReceived,
         super(const MerchantReceiveState(
           status: MerchantReceiveStatus.idle,
           statusMessage: 'Enter an amount to receive',
@@ -230,6 +239,9 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
       statusMessage: 'Payment received',
       receivedTokens: stored,
     );
+    // Hand the received tokens to the pending-settlement store (Task 9) so the
+    // merchant can redeem them at the backend from the Settlement screen.
+    _onTokensReceived?.call(stored);
     unawaited(_trySend(BleMessage.transferComplete(
       TransferComplete(nonce: transfer.nonce, receivedCount: stored.length),
     )));
@@ -304,5 +316,7 @@ final merchantReceiveControllerProvider = StateNotifierProvider.autoDispose<
   return MerchantReceiveController(
     transport: ref.watch(blePeripheralTransportProvider),
     permissions: ref.watch(blePeripheralPermissionServiceProvider),
+    onTokensReceived: (tokens) =>
+        ref.read(pendingSettlementProvider.notifier).addTokens(tokens),
   );
 });

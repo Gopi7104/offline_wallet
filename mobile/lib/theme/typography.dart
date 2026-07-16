@@ -7,7 +7,7 @@ import 'colors.dart';
 abstract final class AppTypography {
   static const String _family = 'Roboto';
 
-  static TextTheme get textTheme => const TextTheme(
+  static TextTheme get textTheme => TextTheme(
         displayLarge: TextStyle(
           fontFamily: _family,
           fontSize: 40,
@@ -82,22 +82,20 @@ abstract final class AppTypography {
   /// Bespoke style for the hero wallet balance — bigger than any named
   /// Material3 slot, tabular figures so the digits don't jitter as they
   /// count up.
-  static const TextStyle balanceLarge = TextStyle(
-    fontFamily: _family,
-    fontSize: 44,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -1,
-    color: AppColors.textPrimary,
-    height: 1.05,
-    fontFeatures: [FontFeature.tabularFigures()],
-  );
+  static TextStyle get balanceLarge => const TextStyle(
+        fontFamily: _family,
+        fontSize: 44,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -1,
+        height: 1.05,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ).copyWith(color: AppColors.textPrimary);
 
-  static const TextStyle balanceMedium = TextStyle(
-    fontFamily: _family,
-    fontSize: 30,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -0.5,
-    color: AppColors.textPrimary,
-    fontFeatures: [FontFeature.tabularFigures()],
-  );
+  static TextStyle get balanceMedium => const TextStyle(
+        fontFamily: _family,
+        fontSize: 30,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.5,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ).copyWith(color: AppColors.textPrimary);
 }

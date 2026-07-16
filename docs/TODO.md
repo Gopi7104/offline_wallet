@@ -8,6 +8,12 @@ Outstanding tasks and decisions. This is a living document — items should trac
 
 ---
 
+## Blocking — Before Final Demo/Release
+
+- [ ] **Two-Phone Verification (Step 1)** — postponed, NOT completed. Requires a second physical Android device to verify multi-device flows (one-active-device enforcement, device re-registration, BLE two-party exchange) end-to-end. Currently only one physical Android device is available for testing. `[FR-ID-04]` — must be completed before the final demo/release.
+
+---
+
 ## High Priority — Unblock Phase 1
 
 - [ ] Produce the **DB migration set** — `accounts`, `devices` (with one-active-device partial-unique index), `coins`, `ledger_entries`, `spent_coins` (UNIQUE `coin_id`). `[FR-ID-04, FR-SET-03]` (ARCHITECTURE §5.2)

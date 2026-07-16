@@ -91,4 +91,67 @@ void main() {
 
     expect(find.byKey(const Key('open-merchant-dashboard')), findsOneWidget);
   });
+
+  testWidgets('Home greets a named user by name, not their email', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          merchantRepositoryProvider.overrideWithValue(FakeMerchantRepository()),
+          onboardingSeenProvider.overrideWith(
+            (ref) => OnboardingSeenNotifier.seeded(InMemorySecureStore(), true),
+          ),
+          authControllerProvider.overrideWith(
+            (ref) => AuthController.seeded(
+              FakeAuthService(),
+              InMemorySecureStore(),
+              const AuthSessionState(
+                status: AuthStatus.authenticated,
+                user: AppUser(uid: 'u-1', email: 'jane@user.com', displayName: 'Jane Doe'),
+              ),
+            ),
+          ),
+          pinSetProvider.overrideWith((ref) => Future.value(true)),
+          walletRepositoryProvider.overrideWithValue(FakeWalletRepository()),
+        ],
+        child: const OfflineWalletApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Jane Doe'), findsOneWidget);
+    expect(find.text('jane@user.com'), findsNothing);
+  });
+
+  testWidgets('Home falls back to email when displayName is blank, not a blank greeting', (tester) async {
+    // Regression: accounts whose profile was never given a name (e.g.
+    // created directly in the Firebase console) can have displayName set to
+    // "" rather than null — `??` alone treats "" as present and greets with
+    // nothing at all.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          merchantRepositoryProvider.overrideWithValue(FakeMerchantRepository()),
+          onboardingSeenProvider.overrideWith(
+            (ref) => OnboardingSeenNotifier.seeded(InMemorySecureStore(), true),
+          ),
+          authControllerProvider.overrideWith(
+            (ref) => AuthController.seeded(
+              FakeAuthService(),
+              InMemorySecureStore(),
+              const AuthSessionState(
+                status: AuthStatus.authenticated,
+                user: AppUser(uid: 'u-1', email: 'blank-name@user.com', displayName: ''),
+              ),
+            ),
+          ),
+          pinSetProvider.overrideWith((ref) => Future.value(true)),
+          walletRepositoryProvider.overrideWithValue(FakeWalletRepository()),
+        ],
+        child: const OfflineWalletApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('blank-name@user.com'), findsOneWidget);
+  });
 }

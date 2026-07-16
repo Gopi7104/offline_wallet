@@ -19,9 +19,10 @@ void _check(bool ok, String label) {
 Future<void> main(List<String> args) async {
   final baseUrl = args.isNotEmpty ? args.first : 'http://localhost:3000';
   const account = 'e2e-merchant';
+  Future<Map<String, String>> identity() async => {'x-account-id': account};
 
-  final merchant = MerchantApiClientImpl(baseUrl: baseUrl, accountId: account);
-  final wallet = WalletApiClientImpl(baseUrl: baseUrl, accountId: account);
+  final merchant = MerchantApiClientImpl(baseUrl: baseUrl, identity: identity);
+  final wallet = WalletApiClientImpl(baseUrl: baseUrl, identity: identity);
 
   final merchantIdPattern = RegExp(r'^MER-[0-9A-F]{12}$');
 

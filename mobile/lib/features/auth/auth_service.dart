@@ -55,9 +55,23 @@ abstract interface class AuthService {
   Stream<AppUser?> authStateChanges();
   AppUser? get currentUser;
   Future<AppUser> signInWithEmail(String email, String password);
-  Future<AppUser> registerWithEmail(String email, String password);
+
+  /// Registers a new account. [displayName], when given, is set on the
+  /// Firebase profile immediately — without it, every screen that greets the
+  /// user (e.g. Home's "Welcome back") has nothing but the raw email to show.
+  Future<AppUser> registerWithEmail(String email, String password, {String? displayName});
   Future<AppUser> signInWithGoogle();
   Future<AppUser> signInWithApple();
   Future<AppUser> continueAsGuest();
   Future<void> signOut();
+
+  /// Sends a password-reset email via the provider (Firebase handles
+  /// delivery). Throws [AuthNotConfiguredException] where there's no real
+  /// provider to send it (Guest Mode fallback).
+  Future<void> sendPasswordResetEmail(String email);
+
+  /// The current Firebase ID token, or null when signed out / guest (guests
+  /// have no Firebase session — see `continueAsGuest`). Used to authenticate
+  /// backend requests (`Authorization: Bearer <idToken>`, FR-ID-01).
+  Future<String?> getIdToken();
 }

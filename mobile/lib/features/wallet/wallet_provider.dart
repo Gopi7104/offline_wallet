@@ -12,6 +12,7 @@ import 'package:offline_wallet/domain/denominations.dart';
 import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'package:offline_wallet/domain/wallet_repository.dart';
+import 'package:offline_wallet/features/auth/auth_provider.dart';
 
 /// Wallet state for Task 2. Simple in-memory state; Task 8+ adds
 /// persistence and sync (ARCHITECTURE.md §8).
@@ -21,7 +22,10 @@ import 'package:offline_wallet/domain/wallet_repository.dart';
 const String kCustomerAccountId = 'test-account-1';
 
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
-  final apiClient = WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl);
+  final apiClient = WalletApiClientImpl(
+    baseUrl: AppConfig.apiBaseUrl,
+    identity: ref.read(identityHeadersProvider),
+  );
   return WalletRepositoryImpl(apiClient: apiClient);
 });
 

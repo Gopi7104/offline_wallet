@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "863057766325",
+    "project_id": "offline-wallet-ab2fc",
+    "storage_bucket": "offline-wallet-ab2fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:863057766325:android:8309503bd768b1c5215bfc",
+        "android_client_info": {
+          "package_name": "com.gopi.offlinewallet"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "863057766325-d3ru75b5kpkcfu6oglgc4eajgidclmc4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ2yfC5nsLkkcRId1UttfBj2Hb7IiXFco"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "863057766325-d3ru75b5kpkcfu6oglgc4eajgidclmc4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

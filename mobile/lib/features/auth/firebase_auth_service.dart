@@ -38,10 +38,18 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<AppUser> registerWithEmail(String email, String password) async {
+  Future<AppUser> registerWithEmail(String email, String password, {String? displayName}) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(email: email, password: password);
-      return _toAppUser(credential.user!);
+      final user = credential.user!;
+      final trimmedName = displayName?.trim();
+      if (trimmedName != null && trimmedName.isNotEmpty) {
+        // updateDisplayName only updates the profile; `user` itself is a
+        // stale snapshot until reloaded, so re-read it via _auth.currentUser.
+        await user.updateDisplayName(trimmedName);
+        await user.reload();
+      }
+      return _toAppUser(_auth.currentUser ?? user);
     } on fb.FirebaseAuthException catch (e) {
       throw AuthException(e.code, _friendlyMessage(e));
     }
@@ -71,6 +79,22 @@ class FirebaseAuthService implements AuthService {
   @override
   Future<void> signOut() async {
     await _auth.signOut();
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on fb.FirebaseAuthException catch (e) {
+      throw AuthException(e.code, _friendlyMessage(e));
+    }
+  }
+
+  @override
+  Future<String?> getIdToken() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    return user.getIdToken();
   }
 
   AppUser _toAppUser(fb.User u) =>

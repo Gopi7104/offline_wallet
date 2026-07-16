@@ -16,12 +16,13 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const account = 'device-smoke';
+  Future<Map<String, String>> identityFor(String accountId) async => {'x-account-id': accountId};
   final wallet =
-      WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: account);
+      WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
   final merchant =
-      MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: account);
-  final payment =
-      PaymentApiClientImpl(baseUrl: AppConfig.apiBaseUrl, accountId: 'device-customer');
+      MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
+  final payment = PaymentApiClientImpl(
+      baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor('device-customer'));
   final merchantIdPattern = RegExp(r'^MER-[0-9A-F]{12}$');
 
   // Fail fast with a clear error instead of hanging if the device cannot reach

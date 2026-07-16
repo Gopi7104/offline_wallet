@@ -21,7 +21,7 @@ class GuestOnlyAuthService implements AuthService {
   }
 
   @override
-  Future<AppUser> registerWithEmail(String email, String password) async {
+  Future<AppUser> registerWithEmail(String email, String password, {String? displayName}) async {
     throw const AuthNotConfiguredException('Firebase is not configured for this build yet.');
   }
 
@@ -48,4 +48,12 @@ class GuestOnlyAuthService implements AuthService {
     _current = null;
     _controller.add(null);
   }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    throw const AuthNotConfiguredException('Firebase is not configured for this build yet.');
+  }
+
+  @override
+  Future<String?> getIdToken() async => null;
 }

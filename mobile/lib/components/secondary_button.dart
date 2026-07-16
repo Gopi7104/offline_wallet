@@ -53,7 +53,7 @@ class _SecondaryButtonState extends State<SecondaryButton> {
                         widget.label,
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 16,
                           fontWeight: FontWeight.w600,

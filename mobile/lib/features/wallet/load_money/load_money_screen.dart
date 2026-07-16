@@ -93,7 +93,7 @@ class _LoadMoneyScreenState extends ConsumerState<LoadMoneyScreen> {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.base),
-                const Icon(Symbols.account_balance_wallet_rounded, color: AppColors.textSecondary),
+                Icon(Symbols.account_balance_wallet_rounded, color: AppColors.textSecondary),
               ],
             ),
           ),

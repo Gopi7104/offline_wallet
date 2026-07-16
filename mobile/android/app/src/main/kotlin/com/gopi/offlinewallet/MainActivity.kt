@@ -1,4 +1,4 @@
-package com.example.offline_wallet
+package com.gopi.offlinewallet
 
 import io.flutter.embedding.android.FlutterActivity
 

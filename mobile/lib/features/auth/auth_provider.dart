@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/core/identity_headers.dart';
 import 'package:offline_wallet/core/secure_storage.dart';
 import 'auth_service.dart';
 import 'firebase_auth_service.dart';
@@ -67,10 +68,10 @@ class AuthController extends StateNotifier<AsyncValue<AuthSessionState>> {
     }
   }
 
-  Future<void> register(String email, String password) async {
+  Future<void> register(String email, String password, {String? displayName}) async {
     state = const AsyncValue.loading();
     try {
-      final user = await _service.registerWithEmail(email, password);
+      final user = await _service.registerWithEmail(email, password, displayName: displayName);
       await _storage.write(_sessionStorageKey, 'authenticated');
       state = AsyncValue.data(AuthSessionState(status: AuthStatus.authenticated, user: user));
     } catch (e, st) {
@@ -116,8 +117,28 @@ class AuthController extends StateNotifier<AsyncValue<AuthSessionState>> {
     await _storage.delete(_sessionStorageKey);
     state = const AsyncValue.data(AuthSessionState.unauthenticated());
   }
+
+  /// Forgot Password: does not change auth state — just delegates to the
+  /// provider and lets the screen surface success/failure.
+  Future<void> sendPasswordReset(String email) => _service.sendPasswordResetEmail(email);
 }
 
 final authControllerProvider = StateNotifierProvider<AuthController, AsyncValue<AuthSessionState>>((ref) {
   return AuthController(ref.watch(authServiceProvider), ref.watch(appSecureStorageProvider));
+});
+
+/// Backend identity headers for whatever's currently signed in (FR-ID-01).
+/// A real Firebase user (email/password, not Guest Mode) sends its ID token
+/// as a bearer token; Guest Mode has no Firebase session, so it falls back
+/// to the legacy `x-account-id` header keyed by the guest's local id — the
+/// backend accepts both (see `resolveAccountId` on the backend).
+final identityHeadersProvider = Provider<IdentityHeaders>((ref) {
+  return () async {
+    final user = ref.read(authControllerProvider).valueOrNull?.user;
+    if (user != null && !user.isGuest) {
+      final token = await ref.read(authServiceProvider).getIdToken();
+      if (token != null) return {'Authorization': 'Bearer $token'};
+    }
+    return {'x-account-id': user?.uid ?? 'test-account-1'};
+  };
 });

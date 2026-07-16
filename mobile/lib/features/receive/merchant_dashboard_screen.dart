@@ -9,6 +9,8 @@ import 'package:offline_wallet/domain/qr_codec.dart';
 import 'package:offline_wallet/theme/theme.dart';
 import 'merchant_provider.dart';
 import 'merchant_receive_screen.dart';
+import 'pending_settlement_provider.dart';
+import 'settlement_screen.dart';
 
 /// A single row in the (local, placeholder) Recent Requests list. Task 6.7 is
 /// a vertical slice with no persistence — this list lives only in widget
@@ -119,6 +121,7 @@ class _MerchantDashboardScreenState
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
+                _PendingSettlementSection(merchant: merchant),
                 _PaymentRequestCard(
                   amountController: _amountController,
                   amountFieldError: _amountFieldError,
@@ -451,6 +454,63 @@ class _RecentRequestRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Pending Settlement section (Task 9). Shown only when the merchant has
+/// received offline payments awaiting settlement. Routes to the Settlement
+/// screen, where the tokens are redeemed at the backend.
+class _PendingSettlementSection extends ConsumerWidget {
+  final Merchant merchant;
+  const _PendingSettlementSection({required this.merchant});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(pendingSettlementProvider);
+    if (!pending.hasPending) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      child: Card(
+        key: const Key('pending-settlement-card'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Symbols.pending_actions_rounded, color: AppColors.warning),
+                  const SizedBox(width: AppSpacing.m),
+                  Expanded(
+                    child: Text('Pending Settlement', style: AppTypography.textTheme.titleLarge),
+                  ),
+                  Text(
+                    pending.pendingAmount.format(),
+                    key: const Key('dashboard-pending-settlement-amount'),
+                    style: AppTypography.textTheme.titleMedium,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${pending.pendingCount} token(s) received offline, ready to settle.',
+                style: AppTypography.textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.l),
+              PrimaryButton(
+                key: const Key('open-settlement-button'),
+                label: 'Settle Received Payments',
+                icon: Symbols.account_balance_rounded,
+                onPressed: () => Navigator.of(context).push(
+                  sharedAxisRoute(SettlementScreen(merchantId: merchant.merchantId)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

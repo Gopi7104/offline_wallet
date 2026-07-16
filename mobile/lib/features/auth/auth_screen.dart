@@ -20,6 +20,7 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isRegister = false;
@@ -27,6 +28,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -55,6 +57,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   Future<void> _submitEmail() async {
     setState(() => _error = null);
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
@@ -62,7 +65,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       return;
     }
     if (_isRegister) {
-      await ref.read(authControllerProvider.notifier).register(email, password);
+      if (name.isEmpty) {
+        setState(() => _error = 'Enter your name.');
+        return;
+      }
+      await ref.read(authControllerProvider.notifier).register(email, password, displayName: name);
     } else {
       await ref.read(authControllerProvider.notifier).signInWithEmail(email, password);
     }
@@ -85,6 +92,31 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     setState(() => _error = null);
     await ref.read(authControllerProvider.notifier).signInWithApple();
     await _afterAttempt();
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Enter your email above first, then tap "Forgot password?".');
+      return;
+    }
+    setState(() => _error = null);
+    try {
+      await ref.read(authControllerProvider.notifier).sendPasswordReset(email);
+      if (!mounted) return;
+      await showAppInfoDialog(
+        context,
+        title: 'Check your email',
+        message: 'If an account exists for $email, a password reset link is on its way.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (e is AuthNotConfiguredException) {
+        await showAppInfoDialog(context, title: 'Coming soon', message: '$e');
+      } else {
+        setState(() => _error = '$e');
+      }
+    }
   }
 
   @override
@@ -118,6 +150,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.xxl),
+              if (_isRegister) ...[
+                TextField(
+                  key: const Key('auth-name-field'),
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Symbols.person_rounded)),
+                ),
+                const SizedBox(height: AppSpacing.base),
+              ],
               TextField(
                 key: const Key('auth-email-field'),
                 controller: _emailController,
@@ -131,6 +172,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Symbols.lock_rounded)),
               ),
+              if (!_isRegister) ...[
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('auth-forgot-password-button'),
+                    onPressed: loading ? null : _handleForgotPassword,
+                    child: const Text('Forgot password?'),
+                  ),
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.base),
                 Text(
@@ -153,14 +204,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 child: Text(_isRegister ? 'Already have an account? Sign in' : "New here? Create an account"),
               ),
               const SizedBox(height: AppSpacing.l),
-              const Row(
+              Row(
                 children: [
-                  Expanded(child: Divider()),
+                  const Expanded(child: Divider()),
                   Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.base),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.base),
                     child: Text('or continue with', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
                   ),
-                  Expanded(child: Divider()),
+                  const Expanded(child: Divider()),
                 ],
               ),
               const SizedBox(height: AppSpacing.l),

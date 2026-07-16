@@ -4,6 +4,7 @@ import 'package:offline_wallet/data/merchant_api_client_impl.dart';
 import 'package:offline_wallet/data/merchant_repository_impl.dart';
 import 'package:offline_wallet/domain/merchant.dart';
 import 'package:offline_wallet/domain/merchant_repository.dart';
+import 'package:offline_wallet/features/auth/auth_provider.dart';
 
 /// Merchant Mode state (ARCHITECTURE.md §6.1 `receive/` — merchant role).
 /// Task 4: enable Merchant Mode, read the dashboard, generate a placeholder QR.
@@ -13,7 +14,10 @@ import 'package:offline_wallet/domain/merchant_repository.dart';
 const String kMerchantAccountId = 'test-account-1';
 
 final merchantRepositoryProvider = Provider<MerchantRepository>((ref) {
-  final apiClient = MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl);
+  final apiClient = MerchantApiClientImpl(
+    baseUrl: AppConfig.apiBaseUrl,
+    identity: ref.read(identityHeadersProvider),
+  );
   return MerchantRepositoryImpl(apiClient: apiClient);
 });
 

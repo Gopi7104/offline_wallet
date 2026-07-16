@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:offline_wallet/core/identity_headers.dart';
 import 'wallet_api_client.dart';
 
 /// A private IP that's unreachable (Wi-Fi off, different network than the dev
@@ -13,19 +14,21 @@ const Duration _requestTimeout = Duration(seconds: 8);
 /// Concrete HTTP client for wallet endpoints.
 class WalletApiClientImpl implements WalletApiClient {
   final String baseUrl;
-  final String? accountId; // For the x-account-id header (temp, Task 2).
+  final IdentityHeaders? identity; // Firebase bearer token or x-account-id (FR-ID-01).
 
-  WalletApiClientImpl({
-    required this.baseUrl,
-    this.accountId = 'test-account-1',
-  });
+  WalletApiClientImpl({required this.baseUrl, this.identity});
+
+  Future<void> _addIdentityHeaders(HttpClientRequest request) async {
+    final headers = await identity?.call() ?? const {'x-account-id': 'test-account-1'};
+    headers.forEach(request.headers.set);
+  }
 
   @override
   Future<WalletResponse> getWallet() async {
     final url = Uri.parse('$baseUrl/v1/wallet');
     final client = HttpClient()..connectionTimeout = _connectTimeout;
     final request = await client.getUrl(url).timeout(_requestTimeout);
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
+    await _addIdentityHeaders(request);
     final response = await request.close().timeout(_requestTimeout);
 
     if (response.statusCode != 200) {
@@ -42,7 +45,7 @@ class WalletApiClientImpl implements WalletApiClient {
     final client = HttpClient()..connectionTimeout = _connectTimeout;
     final request = await client.postUrl(url).timeout(_requestTimeout);
     request.headers.contentType = ContentType.json;
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
+    await _addIdentityHeaders(request);
     request.write(jsonEncode({'amount': amountPaise}));
     final response = await request.close().timeout(_requestTimeout);
     final body = await utf8.decoder.bind(response).join();

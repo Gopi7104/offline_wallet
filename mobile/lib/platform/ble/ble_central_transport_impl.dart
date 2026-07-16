@@ -45,7 +45,19 @@ class BleCentralTransportImpl implements BleCentralTransport {
   }
 
   Future<void> _startScan() async {
+    // Deliberately not filtering the platform scan by service UUID: the
+    // merchant peripheral (ble_peripheral_transport_impl.dart) puts that UUID
+    // in the *scan response*, not the primary advertisement, to fit the
+    // legacy 31-byte packet. A `ScanFilter(withServices: ...)` matches against
+    // scan-response-only fields inconsistently across Android BLE stacks
+    // (notably flaky on several OEM/MediaTek chipsets) — sometimes the
+    // merchant is simply never reported, which reads as a connect timeout /
+    // "connection lost" a few seconds later with no indication why. The
+    // local name IS always in the primary packet, so filter on that instead
+    // (still Dart-side, not a platform filter) — reliable regardless of scan
+    // response timing.
     _scanSub = UniversalBle.scanStream.listen((device) {
+      if (device.name != BleUuids.merchantLocalName) return;
       _discovered[device.deviceId] = device;
       _scanController.add(_discovered.values
           .map((d) => BleDiscoveredDevice(
@@ -55,7 +67,7 @@ class BleCentralTransportImpl implements BleCentralTransport {
               ))
           .toList(growable: false));
     });
-    await UniversalBle.startScan(scanFilter: ScanFilter(withServices: [BleUuids.service]));
+    await UniversalBle.startScan();
   }
 
   @override

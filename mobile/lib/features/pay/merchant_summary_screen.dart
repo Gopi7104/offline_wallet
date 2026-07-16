@@ -59,7 +59,7 @@ class MerchantSummaryScreen extends StatelessWidget {
                   Container(
                     width: 56,
                     height: 56,
-                    decoration: const BoxDecoration(color: AppColors.surfaceRaised, shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: AppColors.surfaceRaised, shape: BoxShape.circle),
                     child: const Icon(Symbols.storefront_rounded, size: 28, color: AppColors.primary),
                   ),
                   const SizedBox(height: AppSpacing.base),

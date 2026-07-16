@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:offline_wallet/core/identity_headers.dart';
 import 'payment_api_client.dart';
 
 /// See WalletApiClientImpl: an unreachable backend must fail fast, not hang
@@ -11,12 +12,9 @@ const Duration _requestTimeout = Duration(seconds: 8);
 /// directly (consistent with the other clients).
 class PaymentApiClientImpl implements PaymentApiClient {
   final String baseUrl;
-  final String? accountId; // Payer, via x-account-id (stubbed auth, Task 5).
+  final IdentityHeaders? identity; // Payer identity: Firebase bearer token or x-account-id (FR-ID-01).
 
-  PaymentApiClientImpl({
-    required this.baseUrl,
-    this.accountId = 'test-account-1',
-  });
+  PaymentApiClientImpl({required this.baseUrl, this.identity});
 
   @override
   Future<PaymentRequestResponse> createPaymentRequest({
@@ -27,7 +25,8 @@ class PaymentApiClientImpl implements PaymentApiClient {
     final client = HttpClient()..connectionTimeout = _connectTimeout;
     final request = await client.postUrl(url).timeout(_requestTimeout);
     request.headers.contentType = ContentType.json;
-    if (accountId != null) request.headers.add('x-account-id', accountId!);
+    final headers = await identity?.call() ?? const {'x-account-id': 'test-account-1'};
+    headers.forEach(request.headers.set);
     request.write(jsonEncode({'merchantId': merchantId, 'amount': amountPaise}));
     final response = await request.close().timeout(_requestTimeout);
     final body = await utf8.decoder.bind(response).join();

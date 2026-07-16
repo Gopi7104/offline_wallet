@@ -47,11 +47,11 @@ class PinKeyboard extends StatelessWidget {
   Widget _buildKey(String key) {
     if (key.isEmpty) return const SizedBox(width: 72, height: 72);
     if (key == 'backspace') {
-      return _KeyButton(onTap: onBackspace, child: const Icon(Symbols.backspace_rounded, color: AppColors.textPrimary));
+      return _KeyButton(onTap: onBackspace, child: Icon(Symbols.backspace_rounded, color: AppColors.textPrimary));
     }
     return _KeyButton(
       onTap: () => onDigit(key),
-      child: Text(key, style: const TextStyle(color: AppColors.textPrimary, fontSize: 26, fontWeight: FontWeight.w600)),
+      child: Text(key, style: TextStyle(color: AppColors.textPrimary, fontSize: 26, fontWeight: FontWeight.w600)),
     );
   }
 }

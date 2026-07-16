@@ -6,8 +6,9 @@ import { PaymentRequest } from '../domain/payment_request';
 
 /**
  * HTTP controller (interface adapter) for the Customer Pay flow, Payment /
- * Transfer context. Auth is stubbed via the x-account-id header (the payer),
- * consistent with the other controllers. Placeholder only — see PaymentRequest.
+ * Transfer context. The payer's account identity comes from `req.accountId`,
+ * resolved by `resolveAccountId` (Firebase ID token, FR-ID-01). Placeholder
+ * only — see PaymentRequest.
  */
 export class PaymentController {
   constructor(private readonly service: PaymentService) {}
@@ -72,8 +73,8 @@ export class PaymentController {
   }
 
   private extractAccountId(req: Request): string {
-    // Stubbed auth: extract from the session/JWT in a later task.
-    return (req.headers['x-account-id'] as string) || 'test-account-1';
+    // Set by resolveAccountId (auth_middleware.ts) ahead of every /v1 route.
+    return req.accountId ?? 'test-account-1';
   }
 
   private handleError(error: unknown, res: Response): void {

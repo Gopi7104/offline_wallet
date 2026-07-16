@@ -27,7 +27,13 @@ class HomeScreen extends ConsumerWidget {
     // backend balance is a settlement-side concern (Task 9).
     final offlineCash = ref.watch(tokenBalanceProvider);
     final user = ref.watch(authControllerProvider).valueOrNull?.user;
-    final greetingName = user == null || user.isGuest ? 'Guest' : (user.displayName ?? user.email ?? 'there');
+    // A blank string (not just null) shows up for accounts whose profile was
+    // never given a name (e.g. created directly in the Firebase console) —
+    // `??` alone treats "" as present and never falls through to the email.
+    final trimmedDisplayName = user?.displayName?.trim();
+    final greetingName = user == null || user.isGuest
+        ? 'Guest'
+        : (trimmedDisplayName != null && trimmedDisplayName.isNotEmpty ? trimmedDisplayName : (user.email ?? 'there'));
 
     return Scaffold(
       appBar: AppBar(
@@ -99,7 +105,7 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Symbols.storefront_rounded, color: AppColors.textSecondary),
+                      Icon(Symbols.storefront_rounded, color: AppColors.textSecondary),
                       const SizedBox(width: AppSpacing.m),
                       Expanded(
                         child: Text('Merchant Mode', style: AppTypography.textTheme.titleMedium),

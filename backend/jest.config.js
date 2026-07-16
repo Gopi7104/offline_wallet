@@ -6,4 +6,5 @@ module.exports = {
   testMatch: ['**/*.test.ts'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts'],
   clearMocks: true,
+  setupFilesAfterEnv: ['<rootDir>/tests/setup/db_setup.ts'],
 };
