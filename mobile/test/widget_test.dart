@@ -42,11 +42,6 @@ class FakeMerchantRepository implements MerchantRepository {
 
   @override
   Future<Merchant?> getMerchant(String accountId) async => null;
-
-  @override
-  Future<QrPayload> generateQrPayload(String accountId, {int? amountPaise}) async {
-    return const QrPayload(v: 1, merchantId: 'MER-ABC123DEF456', nonce: 'n', ts: 1752480000);
-  }
 }
 
 void main() {

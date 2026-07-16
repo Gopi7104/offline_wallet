@@ -57,23 +57,4 @@ class MerchantApiClientImpl implements MerchantApiClient {
     final body = await utf8.decoder.bind(response).join();
     return MerchantResponse.fromJson(jsonDecode(body) as Map<String, dynamic>);
   }
-
-  /// POST /v1/merchant/qr — create a Payment Request and generate its QR
-  /// (Task 6.7). `amountPaise` present → Fixed Amount; omitted → Open Amount.
-  @override
-  Future<QrResponse> generateQr({int? amountPaise}) async {
-    final url = Uri.parse('$baseUrl/v1/merchant/qr');
-    final client = HttpClient()..connectionTimeout = _connectTimeout;
-    final request = await client.postUrl(url).timeout(_requestTimeout);
-    request.headers.contentType = ContentType.json;
-    await _addIdentityHeaders(request);
-    request.write(jsonEncode(amountPaise == null ? {} : {'amountPaise': amountPaise}));
-    final response = await request.close().timeout(_requestTimeout);
-
-    if (response.statusCode != 201) {
-      throw Exception('generateQr failed: ${response.statusCode}');
-    }
-    final body = await utf8.decoder.bind(response).join();
-    return QrResponse.fromJson(jsonDecode(body) as Map<String, dynamic>);
-  }
 }

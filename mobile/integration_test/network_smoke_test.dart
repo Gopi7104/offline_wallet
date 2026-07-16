@@ -47,13 +47,8 @@ void main() {
     expect(dash, isNotNull);
     expect(dash!.merchantId, enabled.merchantId);
 
-    // ✓ Generate QR endpoint works
-    final qr = await guarded('POST /v1/merchant/qr', merchant.generateQr(amountPaise: 12345));
-    expect(qr.merchantId, enabled.merchantId);
-    expect(qr.amountPaise, 12345);
-    expect(qr.nonce.isNotEmpty, isTrue);
-
-    // Customer Pay is entirely offline over BLE (no backend call) — see
-    // payment_session_controller.dart / merchant_receive_controller.dart.
+    // Payment QR generation + Customer Pay are entirely offline over BLE (no
+    // backend call) — see merchant_receive_controller.dart /
+    // payment_session_controller.dart.
   });
 }

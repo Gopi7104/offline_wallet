@@ -10,8 +10,8 @@ import { getPool } from '../../../platform/db';
  * Owns: accounts, device bindings, one-active-device (FR-ID-04),
  * Firebase token → session (FR-ID-01), and the Merchant *role* on an account
  * (Merchant Mode, FR-MER-01 — "a user is a Customer and, in Merchant Mode, a
- * Merchant", §4.1). QR/nonce generation is owned by the Payment context and
- * delegated to it (§4.2, §7).
+ * Merchant", §4.1). Payment-request QR generation is fully offline, owned by
+ * the mobile app's BLE Receive Payment flow — there is no backend QR endpoint.
  * Endpoints (§5.6): POST /v1/auth/session, POST /v1/devices/register.
  * /auth/session is implemented (FR-ID-01, this task); device binding
  * (FR-ID-02/03/04) stays a 501 stub until the Device Key task lands.
@@ -56,7 +56,6 @@ export function registerIdentityRoutes(
 
   router.post('/merchant/enable', (req, res) => merchantController.enable(req, res));
   router.get('/merchant', (req, res) => merchantController.getDashboard(req, res));
-  router.post('/merchant/qr', (req, res) => merchantController.generateQr(req, res));
 
   // Test helper (temporary), consistent with the wallet context.
   (router as any).__merchantRepository = merchantRepository;

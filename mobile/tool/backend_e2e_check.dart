@@ -37,12 +37,8 @@ Future<void> main(List<String> args) async {
   _check(fetched != null && fetched.merchantId == enabled.merchantId,
       'getMerchant() returns the same Merchant ID (idempotent)');
 
-  final qr1 = await merchant.generateQr(amountPaise: 12345);
-  _check(qr1.merchantId == enabled.merchantId && qr1.amountPaise == 12345 && qr1.nonce.isNotEmpty,
-      'generateQr() returns a payload bound to the merchant with the amount');
-
-  final qr2 = await merchant.generateQr();
-  _check(qr2.nonce != qr1.nonce, 'each QR gets a fresh nonce');
+  // Payment QR generation is offline-only now (BLE Receive Payment screen) —
+  // no backend endpoint to check here.
 
   // --- Wallet (proves the pre-existing wallet slice still works too) ---
   final w0 = await wallet.getWallet();
