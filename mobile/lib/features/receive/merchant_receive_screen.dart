@@ -72,13 +72,6 @@ class _MerchantReceiveScreenState extends ConsumerState<MerchantReceiveScreen> {
           if (started) ...[
             const SizedBox(height: AppSpacing.xl),
             _MerchantWalletCard(state: state),
-            const SizedBox(height: AppSpacing.xl),
-            SecondaryButton(
-              key: const Key('receive-stop-button'),
-              label: 'Stop',
-              icon: Symbols.stop_circle_rounded,
-              onPressed: () => ref.read(merchantReceiveControllerProvider.notifier).stop(),
-            ),
           ],
         ],
       ),
