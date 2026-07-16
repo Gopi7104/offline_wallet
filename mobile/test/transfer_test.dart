@@ -57,6 +57,7 @@ void main() {
     final offer = PaymentOffer.fromJson(
         const PaymentOffer(amountPaise: 25000, merchantId: 'M', nonce: 'n', ts: 1).toJson());
     expect(offer.amountPaise, 25000);
+    expect(offer.isOpenCash, isFalse);
 
     final ack = TransferAck.fromJson(const TransferAck(nonce: 'n').toJson());
     expect(ack.accepted, isTrue);
@@ -74,5 +75,19 @@ void main() {
     for (final reason in TransferRejectReason.values) {
       expect(TransferRejectReason.fromWire(reason.wire), reason);
     }
+  });
+
+  test('Open Cash PaymentOffer omits "amount" from the wire JSON and round-trips to null', () {
+    const offer = PaymentOffer(merchantId: 'M', nonce: 'n', ts: 1);
+    expect(offer.isOpenCash, isTrue);
+
+    final json = offer.toJson();
+    expect(json.containsKey('amount'), isFalse);
+
+    final decoded = PaymentOffer.fromJson(json);
+    expect(decoded.amountPaise, isNull);
+    expect(decoded.isOpenCash, isTrue);
+    expect(decoded.merchantId, 'M');
+    expect(decoded.nonce, 'n');
   });
 }

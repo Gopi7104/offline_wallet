@@ -50,25 +50,31 @@ enum TransferRejectReason {
 
 /// Merchant → payer: the authoritative payment request over BLE (the OFFER).
 /// Mirrors the QR the payer scanned so the payer can bind QR ↔ BLE by
-/// [merchantId] + [nonce] before paying.
+/// [merchantId] + [nonce] before paying. [amountPaise] is null for an Open
+/// Cash offer (the merchant did not pre-decide an amount — the payer's own
+/// entered amount, carried in the TOKEN_TRANSFER, is authoritative instead).
 class PaymentOffer {
   final int v;
-  final int amountPaise;
+  final int? amountPaise;
   final String merchantId;
   final String nonce;
   final int ts; // epoch seconds
 
   const PaymentOffer({
     this.v = kTransferProtocolVersion,
-    required this.amountPaise,
+    this.amountPaise,
     required this.merchantId,
     required this.nonce,
     required this.ts,
   });
 
+  /// True when the merchant did not pre-decide an amount (Open Cash) — the
+  /// payer supplies the amount instead.
+  bool get isOpenCash => amountPaise == null;
+
   Map<String, dynamic> toJson() => {
     'v': v,
-    'amount': amountPaise,
+    if (amountPaise != null) 'amount': amountPaise,
     'mid': merchantId,
     'n': nonce,
     'ts': ts,
@@ -76,7 +82,7 @@ class PaymentOffer {
 
   static PaymentOffer fromJson(Map<String, dynamic> j) => PaymentOffer(
     v: j['v'] as int,
-    amountPaise: j['amount'] as int,
+    amountPaise: j['amount'] as int?,
     merchantId: j['mid'] as String,
     nonce: j['n'] as String,
     ts: j['ts'] as int,

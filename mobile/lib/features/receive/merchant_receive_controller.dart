@@ -34,7 +34,11 @@ enum MerchantReceiveStatus {
 class MerchantReceiveState {
   final MerchantReceiveStatus status;
   final String statusMessage;
-  final int amountPaise;
+  /// Null for an Open Cash session before a transfer arrives (no amount was
+  /// pre-decided); set to the merchant's fixed amount for a Fixed Amount
+  /// session, and updated to the actually-received amount once a transfer is
+  /// accepted (§`_handleTransfer`).
+  final int? amountPaise;
   final String qrData; // encoded merchant QR to display (empty until started)
   final List<Token> receivedTokens;
   final TransferRejectReason? reason;
@@ -42,7 +46,7 @@ class MerchantReceiveState {
   const MerchantReceiveState({
     required this.status,
     required this.statusMessage,
-    required this.amountPaise,
+    this.amountPaise,
     this.qrData = '',
     this.receivedTokens = const [],
     this.reason,
@@ -106,14 +110,16 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
         super(const MerchantReceiveState(
           status: MerchantReceiveStatus.idle,
           statusMessage: 'Enter an amount to receive',
-          amountPaise: 0,
         ));
 
   MerchantReceiveStatus get _status => state.status;
 
-  /// Begin receiving [amountPaise]: mint a local request, show its QR, and
-  /// start advertising. Safe to call once.
-  Future<void> start(int amountPaise) async {
+  /// Begin receiving. [amountPaise] fixes the requested amount (Fixed
+  /// Amount); pass null for Open Cash — the QR/OFFER carry no amount, and
+  /// whatever positive amount the payer's TOKEN_TRANSFER claims (verified
+  /// against the tokens actually sent) is accepted. Mints a local QR, shows
+  /// it, and starts advertising. Safe to call once.
+  Future<void> start(int? amountPaise) async {
     if (_started) return;
     _started = true;
 
@@ -220,8 +226,18 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
       _reject(TransferRejectReason.malformed);
       return;
     }
+    // Integrity: the claimed amount must equal the sum of the tokens actually
+    // sent (true for both modes — no hidden value, D2 no-change).
     final sum = sumDenominations(transfer.tokens);
-    if (sum.paise != transfer.amountPaise || transfer.amountPaise != state.amountPaise) {
+    if (transfer.amountPaise <= 0 || sum.paise != transfer.amountPaise) {
+      _reject(TransferRejectReason.amountMismatch);
+      return;
+    }
+    // Fixed Amount session: the claimed amount must also match what the
+    // merchant pre-decided. Open Cash (state.amountPaise == null): any
+    // positive, integrity-checked amount is accepted — the payer decides.
+    final expected = state.amountPaise;
+    if (expected != null && transfer.amountPaise != expected) {
       _reject(TransferRejectReason.amountMismatch);
       return;
     }
@@ -237,6 +253,7 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
     state = state.copyWith(
       status: MerchantReceiveStatus.received,
       statusMessage: 'Payment received',
+      amountPaise: transfer.amountPaise, // Open Cash: now known, from the payer.
       receivedTokens: stored,
     );
     // Hand the received tokens to the pending-settlement store (Task 9) so the

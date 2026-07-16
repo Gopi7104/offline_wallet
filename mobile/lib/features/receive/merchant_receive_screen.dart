@@ -8,9 +8,11 @@ import 'package:offline_wallet/theme/theme.dart';
 
 import 'merchant_receive_controller.dart';
 
-/// Merchant Receive Payment (Task 8): enter an amount → show a QR + advertise
+/// Merchant Receive Payment (Task 8; Open Cash): Fixed Amount (enter an
+/// amount) or Open Cash (leave it to the customer) → show a QR + advertise
 /// over BLE → Waiting → Receiving → Verifying → Payment received. Displays the
-/// amount, Pending Settlement, and the received token count.
+/// amount (or "Open Cash" until a transfer arrives), Pending Settlement, and
+/// the received token count.
 class MerchantReceiveScreen extends ConsumerStatefulWidget {
   const MerchantReceiveScreen({super.key});
 
@@ -21,6 +23,7 @@ class MerchantReceiveScreen extends ConsumerStatefulWidget {
 class _MerchantReceiveScreenState extends ConsumerState<MerchantReceiveScreen> {
   final _amountController = TextEditingController();
   String? _amountError;
+  bool _openCash = false;
 
   @override
   void dispose() {
@@ -29,6 +32,11 @@ class _MerchantReceiveScreenState extends ConsumerState<MerchantReceiveScreen> {
   }
 
   void _onStart() {
+    if (_openCash) {
+      setState(() => _amountError = null);
+      ref.read(merchantReceiveControllerProvider.notifier).start(null);
+      return;
+    }
     final rupees = int.tryParse(_amountController.text.trim());
     if (rupees == null || rupees <= 0) {
       setState(() => _amountError = 'Enter a whole rupee amount greater than zero');
@@ -52,6 +60,11 @@ class _MerchantReceiveScreenState extends ConsumerState<MerchantReceiveScreen> {
             _AmountEntryCard(
               controller: _amountController,
               errorText: _amountError,
+              openCash: _openCash,
+              onOpenCashChanged: (v) => setState(() {
+                _openCash = v;
+                _amountError = null;
+              }),
               onStart: _onStart,
             )
           else
@@ -76,10 +89,14 @@ class _MerchantReceiveScreenState extends ConsumerState<MerchantReceiveScreen> {
 class _AmountEntryCard extends StatelessWidget {
   final TextEditingController controller;
   final String? errorText;
+  final bool openCash;
+  final ValueChanged<bool> onOpenCashChanged;
   final VoidCallback onStart;
   const _AmountEntryCard({
     required this.controller,
     required this.errorText,
+    required this.openCash,
+    required this.onOpenCashChanged,
     required this.onStart,
   });
 
@@ -93,9 +110,19 @@ class _AmountEntryCard extends StatelessWidget {
           children: [
             Text('Request a payment', style: AppTypography.textTheme.titleLarge),
             const SizedBox(height: AppSpacing.l),
+            SwitchListTile(
+              key: const Key('receive-open-cash-switch'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Open Cash'),
+              subtitle: const Text('Let the customer enter the amount'),
+              value: openCash,
+              onChanged: onOpenCashChanged,
+            ),
+            const SizedBox(height: AppSpacing.l),
             TextField(
               key: const Key('receive-amount-field'),
               controller: controller,
+              enabled: !openCash,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: AppTypography.textTheme.titleMedium,
@@ -108,7 +135,7 @@ class _AmountEntryCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             PrimaryButton(
               key: const Key('receive-start-button'),
-              label: 'Show QR & Start',
+              label: openCash ? 'Show QR & Start (Open Cash)' : 'Show QR & Start',
               icon: Symbols.qr_code_2_rounded,
               onPressed: onStart,
             ),
@@ -184,7 +211,10 @@ class _MerchantWalletCard extends StatelessWidget {
   final MerchantReceiveState state;
   const _MerchantWalletCard({required this.state});
 
-  String get _amountLabel => '₹${(state.amountPaise / 100).toStringAsFixed(2)}';
+  String get _amountLabel {
+    final paise = state.amountPaise;
+    return paise == null ? 'Open Cash' : '₹${(paise / 100).toStringAsFixed(2)}';
+  }
 
   @override
   Widget build(BuildContext context) {

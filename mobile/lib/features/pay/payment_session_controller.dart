@@ -198,34 +198,44 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
       _fail(TransferRejectReason.nonceMismatch);
       return;
     }
-    if (offer.amountPaise != _params.amountPaise) {
+    // Fixed Amount offer: must match what the payer already agreed to pay
+    // (from the QR). Open Cash offer (offer.amountPaise == null): the
+    // merchant pre-decided nothing, so the payer's own entered amount
+    // (_params.amountPaise) is authoritative instead — nothing to compare here.
+    if (offer.amountPaise != null && offer.amountPaise != _params.amountPaise) {
       _fail(TransferRejectReason.amountMismatch);
       return;
     }
 
+    final amountPaise = _params.amountPaise;
     final tokens = _tokenWallet.state;
-    if (!hasSufficientBalance(offer.amountPaise, tokens)) {
+    if (!hasSufficientBalance(amountPaise, tokens)) {
       _fail(TransferRejectReason.insufficientBalance);
       return;
     }
-    final selected = selectExact(offer.amountPaise, tokens);
+    final selected = selectExact(amountPaise, tokens);
     if (selected == null) {
       _fail(TransferRejectReason.insufficientTokens);
       return;
     }
 
     _selectedTokenIds = selected.map((t) => t.id).toList();
-    unawaited(_sendTransfer(offer, selected));
+    unawaited(_sendTransfer(offer, selected, amountPaise));
   }
 
-  Future<void> _sendTransfer(PaymentOffer offer, List<Token> selected) async {
+  Future<void> _sendTransfer(PaymentOffer offer, List<Token> selected, int amountPaise) async {
     _set(PaymentSessionStatus.sending, 'Sending payment…');
     try {
       await _transport.send(BleMessage.ack(TransferAck(nonce: offer.nonce)));
       final transfer = TokenTransfer(
         tokenIds: _selectedTokenIds,
         tokens: selected.map((t) => t.copyWithStatus(TokenStatus.inTransit)).toList(),
-        amountPaise: offer.amountPaise,
+        // Always the payer's own resolved amount — for a Fixed Amount offer
+        // this already equals offer.amountPaise (checked above); for Open
+        // Cash, offer.amountPaise is null and this is the only amount there
+        // is (PAYMENT_PROTOCOL.md's "amount == Σ denom" still holds — it's
+        // just decided by the payer instead of the merchant).
+        amountPaise: amountPaise,
         merchantId: offer.merchantId,
         nonce: offer.nonce,
         timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,

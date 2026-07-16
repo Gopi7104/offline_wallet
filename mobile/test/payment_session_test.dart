@@ -11,7 +11,7 @@ import 'fake_ble_transports.dart';
 
 const _params = PaymentSessionParams(merchantId: 'MER-1', nonce: 'n-1', amountPaise: 25000);
 
-BleMessage _offer({String mid = 'MER-1', String nonce = 'n-1', int amount = 25000}) =>
+BleMessage _offer({String mid = 'MER-1', String nonce = 'n-1', int? amount = 25000}) =>
     BleMessage.offer(PaymentOffer(amountPaise: amount, merchantId: mid, nonce: nonce, ts: 1));
 
 void main() {
@@ -143,5 +143,46 @@ void main() {
     expect(controller.state.status, PaymentSessionStatus.failed);
     expect(controller.state.reason, TransferRejectReason.malformed);
     expect(wallet.balance.paise, 25000);
+  });
+
+  group('Open Cash (merchant OFFER carries no amount)', () {
+    test(
+        'accepts an Open Cash OFFER and sends the TOKEN_TRANSFER with the '
+        'payer\'s own entered amount (from AmountEntryScreen, via params)',
+        () async {
+      build(); // params amountPaise: 25000 — what the payer typed in.
+      await controller.start();
+      await pump();
+
+      central.emitIncoming(_offer(amount: null)); // merchant never set an amount
+      await pump();
+
+      expect(controller.state.status, PaymentSessionStatus.awaitingComplete);
+      final transferMsg = central.sent.firstWhere((m) => m.type == BleMessageType.tokenTransfer);
+      final transfer = transferMsg.asTokenTransfer();
+      // The payer decided the amount, not the OFFER.
+      expect(transfer.amountPaise, 25000);
+      expect(transfer.tokens.length, 2); // ₹200 + ₹50
+
+      central.emitIncoming(BleMessage.transferComplete(
+          TransferComplete(nonce: 'n-1', receivedCount: transfer.tokens.length)));
+      await pump();
+
+      expect(controller.state.status, PaymentSessionStatus.success);
+      expect(wallet.balance.paise, 0); // spent
+    });
+
+    test('insufficient balance against the payer\'s own amount, even with an Open Cash OFFER',
+        () async {
+      build(mintPaise: 0);
+      await controller.start();
+      await pump();
+      central.emitIncoming(_offer(amount: null));
+      await pump();
+
+      expect(controller.state.status, PaymentSessionStatus.failed);
+      expect(controller.state.reason, TransferRejectReason.insufficientBalance);
+      expect(central.sent.any((m) => m.type == BleMessageType.tokenTransfer), isFalse);
+    });
   });
 }

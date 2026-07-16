@@ -7,8 +7,7 @@ import 'security_provider.dart';
 
 /// Step-up authentication gate for a payment (Task 6.5): fingerprint first,
 /// falling back to the app's own 6-digit PIN. This is the seam
-/// `pay_flow_test.dart` overrides with a fake — same DI-override pattern as
-/// `paymentRepositoryProvider` elsewhere in this codebase.
+/// `pay_flow_test.dart` overrides with a fake DI override.
 abstract interface class PaymentStepUpAuthenticator {
   /// Returns true once the user has proven presence (biometric or correct
   /// PIN); false if they cancel or fail all attempts.

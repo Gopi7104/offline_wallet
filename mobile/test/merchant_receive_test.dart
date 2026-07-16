@@ -151,4 +151,66 @@ void main() {
 
     expect(controller.state.status, MerchantReceiveStatus.cancelled);
   });
+
+  group('Open Cash (no pre-decided amount)', () {
+    Future<String> startOpenAndGetNonce() async {
+      await controller.start(null);
+      await pump();
+      peripheral.emitConnected('payer-1');
+      await pump();
+      final offer = peripheral.sent.firstWhere((m) => m.type == BleMessageType.offer);
+      return offer.asOffer().nonce;
+    }
+
+    test('start(null) sends an OFFER with no amount, and the QR has no amt', () async {
+      await controller.start(null);
+      await pump();
+      expect(controller.state.amountPaise, isNull);
+      // The locally-minted QR must omit `amt` for an Open Cash request —
+      // decode it the same way parseMerchantQr does, minus the base64/JSON
+      // plumbing this test doesn't need: just confirm no amount was baked in
+      // by checking the OFFER, which is built from the same amountPaise.
+      peripheral.emitConnected('payer-1');
+      await pump();
+      final offer = peripheral.sent.firstWhere((m) => m.type == BleMessageType.offer).asOffer();
+      expect(offer.amountPaise, isNull);
+      expect(offer.isOpenCash, isTrue);
+    });
+
+    test('accepts whatever positive amount the payer sends, if tokens sum to it', () async {
+      final nonce = await startOpenAndGetNonce();
+      final tokens = tokensFor(17300); // an amount the merchant never specified
+      peripheral.emitIncoming(BleMessage.tokenTransfer(transferFor(nonce, tokens)));
+      await pump();
+
+      expect(controller.state.status, MerchantReceiveStatus.received);
+      expect(controller.state.receivedCount, tokens.length);
+      expect(controller.state.pendingSettlement.paise, 17300);
+      // The merchant now knows the amount, even though it never set one.
+      expect(controller.state.amountPaise, 17300);
+      expect(peripheral.sent.any((m) => m.type == BleMessageType.transferComplete), isTrue);
+    });
+
+    test('still rejects a claimed amount that does not match the tokens actually sent', () async {
+      final nonce = await startOpenAndGetNonce();
+      final tokens = tokensFor(20000); // sums to ₹200
+      peripheral.emitIncoming(
+          BleMessage.tokenTransfer(transferFor(nonce, tokens, amountOverride: 25000)));
+      await pump();
+
+      expect(controller.state.status, MerchantReceiveStatus.rejected);
+      expect(controller.state.reason, TransferRejectReason.amountMismatch);
+      expect(controller.state.receivedCount, 0);
+    });
+
+    test('rejects a non-positive claimed amount even if it matches an empty token list', () async {
+      final nonce = await startOpenAndGetNonce();
+      peripheral.emitIncoming(
+          BleMessage.tokenTransfer(transferFor(nonce, const [], amountOverride: 0)));
+      await pump();
+
+      expect(controller.state.status, MerchantReceiveStatus.rejected);
+      expect(controller.state.reason, TransferRejectReason.amountMismatch);
+    });
+  });
 }

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/data/merchant_api_client_impl.dart';
-import 'package:offline_wallet/data/payment_api_client_impl.dart';
 import 'package:offline_wallet/data/wallet_api_client_impl.dart';
 
 // On-device networking smoke test (Task 4.1). Runs on the PHYSICAL device and
@@ -21,8 +20,6 @@ void main() {
       WalletApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
   final merchant =
       MerchantApiClientImpl(baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor(account));
-  final payment = PaymentApiClientImpl(
-      baseUrl: AppConfig.apiBaseUrl, identity: () => identityFor('device-customer'));
   final merchantIdPattern = RegExp(r'^MER-[0-9A-F]{12}$');
 
   // Fail fast with a clear error instead of hanging if the device cannot reach
@@ -56,11 +53,7 @@ void main() {
     expect(qr.amountPaise, 12345);
     expect(qr.nonce.isNotEmpty, isTrue);
 
-    // ✓ Customer Pay: payment request validates the merchant + amount (Task 5)
-    final pr = await guarded('POST /v1/payment/request',
-        payment.createPaymentRequest(merchantId: enabled.merchantId, amountPaise: 2500));
-    expect(pr.merchantId, enabled.merchantId);
-    expect(pr.amountPaise, 2500);
-    expect(pr.status, 'CREATED');
+    // Customer Pay is entirely offline over BLE (no backend call) — see
+    // payment_session_controller.dart / merchant_receive_controller.dart.
   });
 }

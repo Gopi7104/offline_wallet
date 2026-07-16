@@ -6,13 +6,12 @@ import 'package:offline_wallet/theme/theme.dart';
 import 'amount_entry_screen.dart';
 import 'payment_confirmation_screen.dart';
 
-/// Merchant summary — shows the scanned merchant and the Payment Request
-/// (Task 6.7) before the payer commits to an amount. A Fixed Amount Payment
-/// Request already carries the amount in the QR, so Continue skips straight
-/// to Confirmation; an Open Amount Payment Request routes to Amount Entry so
-/// the payer can type the amount. The merchant's name is confirmed by the
-/// backend when the payment request is created (shown on the success
-/// screen).
+/// Merchant summary — shows the scanned merchant before the payer commits to
+/// an amount. A Fixed Amount QR already carries the amount, so Continue skips
+/// straight to Confirmation; an Open Cash QR routes to Amount Entry so the
+/// payer can type the amount, which then travels in the BLE TOKEN_TRANSFER
+/// for the merchant to verify (no backend call either way — the whole
+/// payment is offline over BLE).
 class MerchantSummaryScreen extends StatelessWidget {
   final QrPayload payload;
   const MerchantSummaryScreen({super.key, required this.payload});

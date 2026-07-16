@@ -3,7 +3,6 @@ import { registerIdentityRoutes } from '../modules/identity/http';
 import { resolveAccountId } from '../modules/identity/http/auth_middleware';
 import { registerIssuanceRoutes } from '../modules/issuance/http';
 import { registerWalletRoutes } from '../modules/wallet/http';
-import { registerPaymentRoutes } from '../modules/payment/http';
 import { registerSettlementRoutes } from '../modules/settlement/http';
 import { registerLedgerRoutes } from '../modules/ledger/http';
 import { registerRiskRoutes } from '../modules/risk/http';
@@ -28,8 +27,8 @@ export function createServer(): Express {
 
   // PostgreSQL-backed (migrations 001-005); every module below shares one
   // connection pool. Shared merchant store: Merchant Mode (Identity) enables
-  // merchants; the Customer Pay endpoint (Payment) validates against the same
-  // repository, and Settlement validates settling merchants against it too.
+  // merchants, and Settlement validates settling merchants against the same
+  // repository.
   const pool = getPool();
   const merchantRepository = new PgMerchantRepository(pool);
   // Shared append-only ledger: Settlement appends one entry per settlement;
@@ -43,7 +42,6 @@ export function createServer(): Express {
   registerIdentityRoutes(v1, { merchantRepository });
   registerIssuanceRoutes(v1);
   registerWalletRoutes(v1);
-  registerPaymentRoutes(v1, { merchantRepository });
   registerSettlementRoutes(v1, { merchantRepository, ledgerRepository });
   registerLedgerRoutes(v1, { ledgerRepository });
   registerRiskRoutes(v1);
