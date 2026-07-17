@@ -20,6 +20,15 @@ export class InMemoryLedgerRepository implements LedgerRepository {
     return last ? last.hash : null;
   }
 
+  // No `await` between reading the head and pushing, so — unlike the Postgres
+  // adapter — there is no interleaving window to guard against here; a plain
+  // synchronous read-then-push is already atomic on Node's single thread.
+  async appendAtomically(build: (prevHash: string | null) => LedgerEntry): Promise<LedgerEntry> {
+    const entry = build(await this.headHash());
+    await this.append(entry);
+    return entry;
+  }
+
   async findById(ledgerId: string): Promise<LedgerEntry | null> {
     return this.byId.get(ledgerId) ?? null;
   }

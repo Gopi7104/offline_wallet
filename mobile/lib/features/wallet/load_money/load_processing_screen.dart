@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:offline_wallet/components/components.dart';
 import 'package:offline_wallet/data/wallet_api_client.dart';
+import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/features/wallet/wallet_provider.dart';
 import 'package:offline_wallet/features/wallet/wallet_screen.dart';
 import 'package:offline_wallet/theme/theme.dart';
@@ -10,7 +11,11 @@ import 'load_success_screen.dart';
 
 /// Processing — a brief "Verifying…" beat (UX pacing only, no real UPI
 /// network call happens here) before actually calling the real backend
-/// `POST /v1/wallet/load` endpoint that mints the tokens.
+/// `POST /v1/wallet/load` endpoint that mints the tokens. Task 10: the
+/// backend-issued, Ed25519-signed tokens it returns are what the wallet
+/// stores and later spends — there is no local placeholder fallback, so
+/// Load Money now requires backend connectivity (mirroring the real
+/// architecture: minting is the bank's job, not the device's).
 class LoadProcessingScreen extends ConsumerStatefulWidget {
   final int amountPaise;
   const LoadProcessingScreen({super.key, required this.amountPaise});
@@ -47,24 +52,22 @@ class _LoadProcessingScreenState extends ConsumerState<LoadProcessingScreen>
   Future<void> _run() async {
     if (_started) return;
     _started = true;
+    final List<Token> tokens;
     try {
-      // Best-effort backend record. A real validation error (e.g. the holding
-      // cap) blocks the load; a network error does NOT — offline cash is
-      // client-side in the prototype, so the wallet must load even with no
-      // server reachable (a phone in the field).
-      await ref.read(loadWalletProvider(widget.amountPaise).future);
-    } on WalletApiException catch (error) {
+      // The bank mints; the backend is the only source of real, signed
+      // tokens (Task 10) — a network failure here must surface as a real
+      // failure, not fall back to a locally-minted placeholder.
+      tokens = await ref.read(loadWalletProvider(widget.amountPaise).future);
+    } catch (error) {
       if (!mounted) return;
       await _showError(error);
       return;
-    } catch (_) {
-      // Backend unreachable — proceed offline and mint locally anyway.
     }
 
-    // Task 8: minting is client-side — the load mints matching denomination
-    // tokens into the local offline-cash wallet (the source of truth for
-    // offline payments), which is persisted across restarts.
-    ref.read(tokenWalletProvider.notifier).mint(widget.amountPaise);
+    // Store the EXACT backend-issued tokens (real Ed25519 issuer signature)
+    // into the local offline-cash wallet (the source of truth for offline
+    // payments), persisted across restarts.
+    ref.read(tokenWalletProvider.notifier).addTokens(tokens);
     ref.invalidate(walletProvider);
     if (!mounted) return;
     final newBalancePaise = ref.read(tokenBalanceProvider).paise;

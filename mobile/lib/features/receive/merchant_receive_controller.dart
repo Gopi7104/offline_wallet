@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/core/crypto/transfer_verifier.dart';
 import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/domain/ble_message.dart';
 import 'package:offline_wallet/domain/ble_transport.dart';
@@ -195,6 +196,10 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
   }
 
   void _handleTransfer(BleMessage message) {
+    unawaited(_handleTransferAsync(message));
+  }
+
+  Future<void> _handleTransferAsync(BleMessage message) async {
     // Idempotent duplicate: a re-sent transfer for an already-accepted nonce
     // gets the same TRANSFER_COMPLETE re-sent, with no second credit.
     if (_completedNonce != null) {
@@ -244,6 +249,25 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
     final now = DateTime.now();
     if (transfer.tokens.any((t) => t.isExpired(now))) {
       _reject(TransferRejectReason.expiredToken);
+      return;
+    }
+
+    // Owner-signed transfer proof (FR-PAY-04, PAYMENT_PROTOCOL.md §6.4 step 4):
+    // the payer's signature must verify against the public key it presented,
+    // over the exact fields carried in this transfer — any tamper (a
+    // different amount, merchant, nonce, timestamp, token set, or a
+    // substituted public key) invalidates it. This is the ownership proof;
+    // whether that public key belongs to a device actually registered to
+    // this payer's account is a connectivity-dependent check this merchant
+    // cannot make offline (D3 "detect at settlement", not prevent here).
+    final validSignature = await verifyTransferSignature(
+      payload: transfer.signingPayload(),
+      signatureHex: transfer.payerSignature,
+      publicKeyHex: transfer.payerPublicKey,
+    );
+    if (!mounted || _isTerminal) return; // session ended while verifying
+    if (!validSignature) {
+      _reject(TransferRejectReason.invalidSignature);
       return;
     }
 

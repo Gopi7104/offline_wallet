@@ -1,12 +1,11 @@
 import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/core/result.dart';
+import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'package:offline_wallet/domain/wallet_repository.dart';
 import 'wallet_api_client.dart';
 
 /// Concrete wallet repository (data layer). Manages wallet balance via API + cache.
-/// Task 3: balance-only (tokens internal to backend).
-/// Task 8+: will add local token storage (Drift+SQLCipher).
 class WalletRepositoryImpl implements WalletRepository {
   final WalletApiClient apiClient;
   Wallet? _cached;
@@ -36,13 +35,13 @@ class WalletRepositoryImpl implements WalletRepository {
   }
 
   @override
-  Future<Money> loadFunds(String accountId, Money amount) async {
+  Future<List<Token>> loadFunds(String accountId, Money amount) async {
     final response = await apiClient.loadWallet(amount.paise);
     final newBalance = switch (Money.fromPaise(response.newBalancePaise)) {
       Ok(:final value) => value,
       Err() => throw Exception('Invalid balance from server'),
     };
     _cached = Wallet(accountId: accountId, balance: newBalance);
-    return newBalance;
+    return response.tokens;
   }
 }

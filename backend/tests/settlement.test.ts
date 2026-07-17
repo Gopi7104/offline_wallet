@@ -7,34 +7,67 @@ import { InMemorySpentTokenIndex } from '../src/modules/settlement/infra/in_memo
 import { InMemorySettlementRepository } from '../src/modules/settlement/infra/in_memory_settlement_repository';
 import { SettlementService } from '../src/modules/settlement/application/settlement_service';
 import { SubmittedToken } from '../src/modules/settlement/domain/submitted_token';
+import { canonicalTokenPayload, TokenSigningFields } from '../src/shared/crypto/token_canonical_payload';
+import { signEd25519, bytesToHex, hexToBytes } from '../src/shared/crypto/ed25519';
+import { getIssuerPrivateKey } from '../src/platform/issuer_keys';
 
 /**
  * Task 9 — Settlement & Double-Spend Detection.
  * Covers the eight backend acceptance cases: successful settlement, duplicate
  * detection, already-redeemed, unknown merchant, malformed payload, ledger
  * append, merchant-credited-once, and repeat-settlement rejection.
+ *
+ * Ed25519 integration: every `wireToken()` below carries a REAL issuer
+ * signature (signed with the same dev issuer key SettlementService's default
+ * verifier checks against), so the pre-existing accept/reject/duplicate
+ * assertions continue to exercise real cryptographic verification rather
+ * than a placeholder string.
  */
 
 const FIXED_NOW = new Date('2026-07-16T10:00:00.000Z');
 
-/** A token in the mobile wire shape ({id, denom, owner, iat, exp, status, sig}). */
+/** Signs the canonical payload with the real (dev) issuer key. */
+function signAsIssuer(fields: TokenSigningFields): string {
+  return bytesToHex(signEd25519(getIssuerPrivateKey(), canonicalTokenPayload(fields)));
+}
+
+/**
+ * A token in the mobile wire shape ({id, denom, owner, iat, exp, status, sig}).
+ * `now` defaults to FIXED_NOW (the application/domain describe block below
+ * injects that same instant as its SettlementService clock, so iat/exp stay
+ * self-consistent regardless of wall-clock time). The HTTP describe block's
+ * `createServer()` has no clock override — it always checks expiry against
+ * the real system clock — so its calls pass `now: new Date()` to avoid an
+ * expiry computed against a fixed past date eventually elapsing for real.
+ */
 function wireToken(
   id: string,
   denomPaise: number,
-  opts: { expiredBy?: number } = {},
+  opts: { expiredBy?: number; owner?: string; sig?: string; now?: Date } = {},
 ): Record<string, unknown> {
-  const iat = Math.floor(FIXED_NOW.getTime() / 1000) - 3600;
+  const now = opts.now ?? FIXED_NOW;
+  const iat = Math.floor(now.getTime() / 1000) - 3600;
   const exp = opts.expiredBy
-    ? Math.floor(FIXED_NOW.getTime() / 1000) - opts.expiredBy
-    : Math.floor(FIXED_NOW.getTime() / 1000) + 86400; // +1 day by default
+    ? Math.floor(now.getTime() / 1000) - opts.expiredBy
+    : Math.floor(now.getTime() / 1000) + 86400; // +1 day by default
+  const owner = opts.owner ?? 'payer-1';
+  const sig =
+    opts.sig ??
+    signAsIssuer({
+      tokenId: id,
+      denominationPaise: denomPaise,
+      ownerId: owner,
+      issuedAtEpochSeconds: iat,
+      expiryEpochSeconds: exp,
+    });
   return {
     id,
     denom: denomPaise,
-    owner: 'payer-1',
+    owner,
     iat,
     exp,
     status: 'inTransit',
-    sig: 'issuer-sig-placeholder',
+    sig,
   };
 }
 
@@ -145,6 +178,78 @@ describe('Settlement service (application/domain, Task 9)', () => {
     expect(await spent.isSpent('stale')).toBe(false);
   });
 
+  describe('Ed25519 issuer signature verification', () => {
+    it('rejects a token with a missing signature', async () => {
+      const out = await service.settle({ merchantId, tokens: parse(wireToken('no-sig', 10000, { sig: '' })) });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.value.acceptedCount).toBe(0);
+      expect(out.value.rejectedTokenIds).toEqual(['no-sig']);
+      expect(out.value.status).toBe('REJECTED');
+      expect(await spent.isSpent('no-sig')).toBe(false);
+    });
+
+    it('rejects a forged signature (well-formed hex, not produced by the issuer key)', async () => {
+      const forged = 'ab'.repeat(64); // 64-byte well-formed hex, but not a real signature
+      const out = await service.settle({ merchantId, tokens: parse(wireToken('forged', 10000, { sig: forged })) });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.value.acceptedCount).toBe(0);
+      expect(out.value.rejectedTokenIds).toEqual(['forged']);
+      expect(await spent.isSpent('forged')).toBe(false);
+    });
+
+    it('rejects a signature produced by the wrong (non-issuer) key pair', async () => {
+      const attackerKey = hexToBytes('99'.repeat(32), 32, 'attacker key');
+      const iat = Math.floor(FIXED_NOW.getTime() / 1000) - 3600;
+      const exp = Math.floor(FIXED_NOW.getTime() / 1000) + 86400;
+      const sig = bytesToHex(
+        signEd25519(
+          attackerKey,
+          canonicalTokenPayload({
+            tokenId: 'wrong-key',
+            denominationPaise: 10000,
+            ownerId: 'payer-1',
+            issuedAtEpochSeconds: iat,
+            expiryEpochSeconds: exp,
+          }),
+        ),
+      );
+      const out = await service.settle({ merchantId, tokens: parse(wireToken('wrong-key', 10000, { sig })) });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.value.acceptedCount).toBe(0);
+      expect(out.value.rejectedTokenIds).toEqual(['wrong-key']);
+      expect(await spent.isSpent('wrong-key')).toBe(false);
+    });
+
+    it('rejects a token whose denomination was modified after signing', async () => {
+      // Sign for ₹100 (10000 paise), but submit a wire payload claiming ₹500 —
+      // the signature no longer matches the (modified) canonical payload.
+      const raw = wireToken('modified', 10000);
+      raw.denom = 50000;
+      const out = await service.settle({ merchantId, tokens: parse(raw) });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.value.acceptedCount).toBe(0);
+      expect(out.value.rejectedTokenIds).toEqual(['modified']);
+      expect(await spent.isSpent('modified')).toBe(false);
+    });
+
+    it('accepts a validly-signed token alongside rejecting an invalid one in the same batch', async () => {
+      const out = await service.settle({
+        merchantId,
+        tokens: parse(wireToken('valid-1', 20000), wireToken('invalid-1', 10000, { sig: 'not-a-signature' })),
+      });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.value.acceptedTokenIds).toEqual(['valid-1']);
+      expect(out.value.rejectedTokenIds).toEqual(['invalid-1']);
+      expect(out.value.creditedAmount.paise).toBe(20000);
+      expect(out.value.status).toBe('PARTIAL');
+    });
+  });
+
   it('returns UnknownMerchant for a merchant that is not registered', async () => {
     const out = await service.settle({ merchantId: 'MER-000000000000', tokens: parse(wireToken('t1', 10000)) });
     expect(out.ok).toBe(false);
@@ -183,7 +288,14 @@ describe('Settlement HTTP (POST /v1/settlement, Task 9)', () => {
     const merchantId = await enableMerchant('http-mer-1');
     const res = await request(app)
       .post('/v1/settlement')
-      .send({ merchantId, tokens: [wireToken('h1', 50000), wireToken('h2', 5000)] });
+      .set('x-account-id', 'http-mer-1')
+      .send({
+        merchantId,
+        tokens: [
+          wireToken('h1', 50000, { owner: 'http-payer-1', now: new Date() }),
+          wireToken('h2', 5000, { owner: 'http-payer-1', now: new Date() }),
+        ],
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.accepted).toBe(2);
@@ -201,16 +313,26 @@ describe('Settlement HTTP (POST /v1/settlement, Task 9)', () => {
 
   it('200: a repeat settlement of the same tokens is rejected (no double-credit)', async () => {
     const merchantId = await enableMerchant('http-mer-2');
-    const tokens = [wireToken('r1', 20000)];
-    const first = await request(app).post('/v1/settlement').send({ merchantId, tokens });
+    const tokens = [wireToken('r1', 20000, { owner: 'http-payer-2', now: new Date() })];
+    const first = await request(app).post('/v1/settlement').set('x-account-id', 'http-mer-2').send({ merchantId, tokens });
     expect(first.body.accepted).toBe(1);
 
-    const second = await request(app).post('/v1/settlement').send({ merchantId, tokens });
+    const second = await request(app).post('/v1/settlement').set('x-account-id', 'http-mer-2').send({ merchantId, tokens });
     expect(second.status).toBe(200);
     expect(second.body.accepted).toBe(0);
     expect(second.body.duplicates).toBe(1);
     expect(second.body.creditedAmount.paise).toBe(0);
     expect(second.body.status).toBe('REJECTED');
+  });
+
+  it('403 UNAUTHORIZED_MERCHANT when the caller does not own the merchantId (security review, hardening §9)', async () => {
+    const merchantId = await enableMerchant('http-mer-owner');
+    const res = await request(app)
+      .post('/v1/settlement')
+      .set('x-account-id', 'http-mer-attacker')
+      .send({ merchantId, tokens: [wireToken('unauthorized-1', 10000)] });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('UNAUTHORIZED_MERCHANT');
   });
 
   it('404 UNKNOWN_MERCHANT for a merchant that does not exist', async () => {
@@ -223,7 +345,10 @@ describe('Settlement HTTP (POST /v1/settlement, Task 9)', () => {
 
   it('400 EMPTY_SETTLEMENT for an empty token list', async () => {
     const merchantId = await enableMerchant('http-mer-3');
-    const res = await request(app).post('/v1/settlement').send({ merchantId, tokens: [] });
+    const res = await request(app)
+      .post('/v1/settlement')
+      .set('x-account-id', 'http-mer-3')
+      .send({ merchantId, tokens: [] });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('EMPTY_SETTLEMENT');
   });
@@ -232,6 +357,7 @@ describe('Settlement HTTP (POST /v1/settlement, Task 9)', () => {
     const merchantId = await enableMerchant('http-mer-4');
     const res = await request(app)
       .post('/v1/settlement')
+      .set('x-account-id', 'http-mer-4')
       .send({ merchantId, tokens: [{ id: 'bad', denom: 'not-a-number' }] });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('MALFORMED_PAYLOAD');

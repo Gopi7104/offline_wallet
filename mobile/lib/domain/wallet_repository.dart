@@ -1,4 +1,5 @@
 import 'package:offline_wallet/core/money.dart';
+import 'package:offline_wallet/domain/token.dart';
 import 'wallet.dart';
 
 /// WalletRepository — port for persistence (local DB, API, cache).
@@ -10,6 +11,8 @@ abstract interface class WalletRepository {
   /// Save wallet state locally (encrypted storage).
   Future<void> saveWallet(Wallet wallet);
 
-  /// Load funds from the backend (bank simulator). Returns new balance.
-  Future<Money> loadFunds(String accountId, Money amount);
+  /// Load funds from the backend (bank simulator). Returns the exact,
+  /// Ed25519-signed tokens the backend just issued (Task 10) — the caller
+  /// stores these directly; there is no local re-minting.
+  Future<List<Token>> loadFunds(String accountId, Money amount);
 }

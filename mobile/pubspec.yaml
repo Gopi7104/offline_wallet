@@ -32,10 +32,13 @@ dependencies:
   universal_ble: ^2.1.0
   permission_handler: ^11.3.1
 
+  # Task 9 — owner-signed offline transfers (FR-PAY-04, FR-ID-02). Pure-Dart
+  # Ed25519 keygen/sign/verify for the device key (core/crypto/).
+  cryptography: ^2.9.0
+
   # Added in their respective feature tasks (kept out of the skeleton so
   # `flutter pub get` stays light and platform plugins land with their code):
   #   drift + sqlcipher_flutter_libs   — encrypted local store (ADR-6, data/)
-  #   cryptography / sodium            — Ed25519, AES-256-GCM, HKDF (core/crypto)
 
 dev_dependencies:
   flutter_test:

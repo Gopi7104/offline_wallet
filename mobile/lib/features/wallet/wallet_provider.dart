@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/core/money.dart';
@@ -34,7 +35,10 @@ final walletProvider = FutureProvider<Wallet?>((ref) async {
   return repo.getWallet('test-account-1');
 });
 
-final loadWalletProvider = FutureProvider.family<Money, int>((ref, amountPaise) async {
+/// Loads funds from the backend and returns the exact Ed25519-signed tokens
+/// it just issued (Task 10) — the caller stores these directly, never a
+/// locally-minted placeholder.
+final loadWalletProvider = FutureProvider.family<List<Token>, int>((ref, amountPaise) async {
   final repo = ref.watch(walletRepositoryProvider);
   final amount = switch (Money.fromPaise(amountPaise)) {
     Ok(:final value) => value,
@@ -63,7 +67,23 @@ class TokenWalletNotifier extends StateNotifier<List<Token>> {
 
   Money get balance => sumDenominations(state);
 
-  /// Mint denomination tokens for [amountPaise] and add them to the wallet.
+  /// Add tokens returned by a successful Load — the PRODUCTION path (Task 10):
+  /// the exact backend-issued, Ed25519-signed tokens from `POST /wallet/load`,
+  /// never locally re-derived. Normalizes status to `inWallet` (the coin now
+  /// sits in the customer's wallet — ARCHITECTURE.md §4.3 lifecycle), mirroring
+  /// what the backend's own `Wallet.addTokens` does server-side.
+  void addTokens(List<Token> tokens) {
+    if (tokens.isEmpty) return;
+    final received = tokens.map((t) => t.copyWithStatus(TokenStatus.inWallet)).toList();
+    state = [...state, ...received];
+    _persist();
+  }
+
+  /// TEST/DEV-ONLY helper: mint locally-signed placeholder tokens with no
+  /// backend involved. Task 10 removed this from the production Load Money
+  /// flow (see [addTokens]) — this remains only for unit/widget tests that
+  /// need tokens in the wallet without standing up a backend.
+  @visibleForTesting
   void mint(int amountPaise) {
     final minted = _minter.mint(amountPaise, ownerId: kCustomerAccountId);
     if (minted.isEmpty) return;

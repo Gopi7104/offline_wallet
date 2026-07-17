@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:offline_wallet/components/components.dart';
 import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/core/result.dart';
+import 'package:offline_wallet/data/token_store.dart';
 import 'package:offline_wallet/data/wallet_api_client.dart';
+import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'package:offline_wallet/domain/wallet_repository.dart';
 import 'package:offline_wallet/features/wallet/load_money/bank_account_screen.dart';
@@ -37,13 +39,17 @@ class FakeWalletRepository implements WalletRepository {
   Future<void> saveWallet(Wallet wallet) async {}
 
   @override
-  Future<Money> loadFunds(String accountId, Money amount) async {
+  Future<List<Token>> loadFunds(String accountId, Money amount) async {
     loadCalls++;
     if (failCap) {
       throw WalletApiException(400, 'HOLDING_CAP_EXCEEDED', 'Load rejected: over the wallet holding cap');
     }
     _balance = _balance.add(amount);
-    return _balance;
+    // Stands in for the backend's real signed tokens (Task 10) — the fake
+    // doesn't talk to a server, but must still return real denomination
+    // tokens summing to `amount`, since the production code now stores and
+    // spends exactly what this returns (no local placeholder fallback).
+    return TokenMinter().mint(amount.paise, ownerId: accountId);
   }
 }
 

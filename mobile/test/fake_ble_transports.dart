@@ -161,7 +161,12 @@ class LinkedFakeTransport {
 }
 
 /// Let queued broadcast-stream events and microtasks drain between steps.
-Future<void> pump([int turns = 6]) async {
+/// Task 9: the merchant now awaits an Ed25519 signature verification inside
+/// its message handler (an extra async hop beyond the pre-existing
+/// synchronous checks), so this needs enough turns to drain that too —
+/// bumped from 6 to give real crypto work headroom under CI/parallel-test
+/// CPU contention.
+Future<void> pump([int turns = 10]) async {
   for (var i = 0; i < turns; i++) {
     await Future<void>.delayed(Duration.zero);
   }

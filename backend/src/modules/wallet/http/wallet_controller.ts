@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Money } from '../../../shared/money';
 import { isErr, unwrap } from '../../../shared/result';
 import { WalletService, HoldingCapExceeded } from '../application/wallet_service';
+import { logger } from '../../../platform/logger';
 
 /**
  * HTTP controller (interface adapter). Parses requests, calls the service,
@@ -63,11 +64,16 @@ export class WalletController {
       }
       const amount = unwrap(amountR);
 
-      const newBalance = await this.service.loadWallet(accountId, amount);
+      const result = await this.service.loadWallet(accountId, amount);
       res.status(201).json({
         accountId,
         loaded: { paise: amount.paise, currency: amount.currency },
-        newBalance: { paise: newBalance.paise, currency: newBalance.currency },
+        newBalance: { paise: result.balance.paise, currency: result.balance.currency },
+        // The exact tokens just issued (Task 10) — real Ed25519-signed coins,
+        // wire-shaped identically to what settlement/`SubmittedToken.fromWire`
+        // already expects, so the mobile client can store and later spend
+        // these exact tokens instead of a locally-minted placeholder.
+        tokens: result.tokens.map((t) => t.toWireJson()),
       });
     } catch (error) {
       // FR-ISS-06 holding cap → 400 JSON (a well-formed but rejected request).
@@ -85,7 +91,7 @@ export class WalletController {
   }
 
   private handleError(error: unknown, res: Response): void {
-    console.error('WalletController error:', error);
+    logger.error('wallet.controller_error', { message: (error as Error).message });
     res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An error occurred' });
   }
 }

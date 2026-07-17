@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:offline_wallet/core/app_config.dart';
 import 'package:offline_wallet/data/settlement_api_client_impl.dart';
@@ -6,6 +8,7 @@ import 'package:offline_wallet/domain/settlement.dart';
 import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/features/auth/auth_provider.dart';
 
+import 'merchant_provider.dart';
 import 'pending_settlement_provider.dart';
 
 /// Settlement screen phase (idle → processing → summary | error).
@@ -78,7 +81,12 @@ final settlementControllerProvider = StateNotifierProvider.autoDispose<
     SettlementController, SettlementUiState>((ref) {
   return SettlementController(
     repository: ref.watch(settlementRepositoryProvider),
-    onSettled: (result) =>
-        ref.read(pendingSettlementProvider.notifier).markSettled(result),
+    onSettled: (result) {
+      ref.read(pendingSettlementProvider.notifier).markSettled(result);
+      // Re-fetch so the dashboard's "Settled" total reflects the credit that
+      // just landed server-side (enableMerchantMode is idempotent and returns
+      // the merchant's current settled balance — see merchant_service.ts).
+      unawaited(ref.read(merchantModeProvider.notifier).enable());
+    },
   );
 });

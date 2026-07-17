@@ -1,6 +1,10 @@
 import { Request, Response } from 'express';
 import { MerchantService } from '../application/merchant_service';
 import { MerchantProfile } from '../domain/merchant_profile';
+import { logger } from '../../../platform/logger';
+
+/** Sanity cap on free-text input — not a business rule, just resource-exhaustion hygiene. */
+const MAX_DISPLAY_NAME_LENGTH = 200;
 
 /**
  * HTTP controller (interface adapter) for Merchant Mode, in the Identity &
@@ -16,8 +20,15 @@ export class MerchantController {
   async enable(req: Request, res: Response): Promise<void> {
     try {
       const accountId = this.extractAccountId(req);
-      const displayName =
-        typeof req.body?.displayName === 'string' ? req.body.displayName : undefined;
+      const rawDisplayName = req.body?.displayName;
+      if (typeof rawDisplayName === 'string' && rawDisplayName.length > MAX_DISPLAY_NAME_LENGTH) {
+        res.status(400).json({
+          error: 'INVALID_DISPLAY_NAME',
+          message: `displayName must be at most ${MAX_DISPLAY_NAME_LENGTH} characters`,
+        });
+        return;
+      }
+      const displayName = typeof rawDisplayName === 'string' ? rawDisplayName : undefined;
       const profile = await this.service.enableMerchantMode(accountId, displayName);
       res.status(201).json(this.toJson(profile));
     } catch (error) {
@@ -69,7 +80,7 @@ export class MerchantController {
   }
 
   private handleError(error: unknown, res: Response): void {
-    console.error('MerchantController error:', error);
+    logger.error('merchant.controller_error', { message: (error as Error).message });
     res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An error occurred' });
   }
 }

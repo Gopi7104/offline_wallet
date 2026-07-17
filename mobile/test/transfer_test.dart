@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:offline_wallet/core/money.dart';
 import 'package:offline_wallet/core/result.dart';
@@ -41,7 +43,8 @@ void main() {
       nonce: 'n-abc',
       timestamp: 1752403920,
       payerId: 'payer-1',
-      payerSignature: 'payer-sig-placeholder',
+      payerPublicKey: 'aa' * 32,
+      payerSignature: 'bb' * 64,
     );
     final decoded = TokenTransfer.fromJson(transfer.toJson());
     expect(decoded.tokenIds, ['tok-1', 'tok-2']);
@@ -51,6 +54,8 @@ void main() {
     expect(decoded.merchantId, 'MER-1');
     expect(decoded.nonce, 'n-abc');
     expect(decoded.payerId, 'payer-1');
+    expect(decoded.payerPublicKey, 'aa' * 32);
+    expect(decoded.payerSignature, 'bb' * 64);
   });
 
   test('PaymentOffer / TransferAck / TransferComplete / CancelNotice round-trip', () {
@@ -89,5 +94,111 @@ void main() {
     expect(decoded.isOpenCash, isTrue);
     expect(decoded.merchantId, 'M');
     expect(decoded.nonce, 'n');
+  });
+
+  group('canonicalTransferPayload (owner-signed transfer, FR-PAY-04)', () {
+    List<int> base({List<String>? tokenIds}) => canonicalTransferPayload(
+          v: 1,
+          tokenIds: tokenIds ?? const ['tok-1', 'tok-2'],
+          amountPaise: 25000,
+          merchantId: 'MER-1',
+          nonce: 'n-abc',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'aa' * 32,
+        );
+
+    test('is deterministic for the same fields', () {
+      expect(base(), base());
+    });
+
+    test('is insensitive to tokenId order (sorted before signing)', () {
+      expect(
+        canonicalTransferPayload(
+          v: 1,
+          tokenIds: const ['tok-2', 'tok-1'],
+          amountPaise: 25000,
+          merchantId: 'MER-1',
+          nonce: 'n-abc',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'aa' * 32,
+        ),
+        base(),
+      );
+    });
+
+    test('changes when any single field changes', () {
+      final b = base();
+      expect(
+        canonicalTransferPayload(
+          v: 1,
+          tokenIds: const ['tok-1', 'tok-2'],
+          amountPaise: 25001,
+          merchantId: 'MER-1',
+          nonce: 'n-abc',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'aa' * 32,
+        ),
+        isNot(b),
+      );
+      expect(
+        canonicalTransferPayload(
+          v: 1,
+          tokenIds: const ['tok-1', 'tok-2'],
+          amountPaise: 25000,
+          merchantId: 'MER-2', // different merchant
+          nonce: 'n-abc',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'aa' * 32,
+        ),
+        isNot(b),
+      );
+      expect(
+        canonicalTransferPayload(
+          v: 1,
+          tokenIds: const ['tok-1', 'tok-2'],
+          amountPaise: 25000,
+          merchantId: 'MER-1',
+          nonce: 'n-different',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'aa' * 32,
+        ),
+        isNot(b),
+      );
+      expect(base(tokenIds: const ['tok-1', 'tok-3']), isNot(b));
+      expect(
+        canonicalTransferPayload(
+          v: 1,
+          tokenIds: const ['tok-1', 'tok-2'],
+          amountPaise: 25000,
+          merchantId: 'MER-1',
+          nonce: 'n-abc',
+          timestamp: 1752403920,
+          payerId: 'payer-1',
+          payerPublicKeyHex: 'bb' * 32, // substituted key
+        ),
+        isNot(b),
+      );
+    });
+
+    test('safely escapes ids containing quotes/braces (no injection into the payload shape)', () {
+      final tricky = canonicalTransferPayload(
+        v: 1,
+        tokenIds: const ['"}{"merchantId":"evil'],
+        amountPaise: 1,
+        merchantId: 'M',
+        nonce: 'n',
+        timestamp: 1,
+        payerId: 'p',
+        payerPublicKeyHex: 'aa' * 32,
+      );
+      final parsed = jsonDecode(utf8.decode(tricky)) as Map<String, dynamic>;
+      expect((parsed['tokenIds'] as List).single, '"}{"merchantId":"evil');
+      expect(parsed['merchantId'], 'M');
+    });
   });
 }

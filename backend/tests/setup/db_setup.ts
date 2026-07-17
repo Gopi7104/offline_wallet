@@ -10,6 +10,9 @@ const TABLES = [
   'merchant_settlement_balances',
   'spent_tokens',
   'ledger_entries',
+  'device_registrations',
+  'risk_flags',
+  'risk_payer_activity',
 ];
 
 /**

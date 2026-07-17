@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:offline_wallet/components/components.dart';
 import 'package:offline_wallet/features/auth/auth_provider.dart';
+import 'package:offline_wallet/features/identity/device_registration_provider.dart';
 import 'package:offline_wallet/features/pay/pay_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_dashboard_screen.dart';
 import 'package:offline_wallet/features/receive/merchant_provider.dart';
@@ -20,6 +21,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Fire-and-forget: register this device (or touch last-seen) once we're
+    // signed in and landed on Home (FR-PAY-04/FR-ID-02/03). Best-effort, no
+    // UI dependency on the result — an unreachable backend never blocks Home.
+    ref.watch(deviceRegistrationProvider);
     final merchantMode = ref.watch(merchantModeProvider);
     final isEnabled = merchantMode.valueOrNull != null;
     // Offline cash = the local token wallet (spendable offline; decreases on a

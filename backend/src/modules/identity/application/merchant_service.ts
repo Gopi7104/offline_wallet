@@ -1,5 +1,6 @@
-import { MerchantProfile } from '../domain/merchant_profile';
+import { MerchantProfile, MerchantWallet } from '../domain/merchant_profile';
 import { MerchantRepository } from '../domain/merchant_repository';
+import { SettlementRepository } from '../../settlement/domain/settlement_repository';
 
 /**
  * MerchantService — Merchant Mode use cases (FR-MER-01/02). Part of the
@@ -13,6 +14,11 @@ export class MerchantService {
   constructor(
     private readonly repository: MerchantRepository,
     private readonly clock: () => Date = () => new Date(),
+    // Optional: the Settlement context owns the authoritative settled balance
+    // (merchant_profiles.settled_paise is a stale placeholder, see
+    // merchant_profile.ts's MerchantWallet doc comment). Undefined preserves
+    // the old always-zero behavior for callers that don't wire it up (tests).
+    private readonly settlementRepository?: SettlementRepository,
   ) {}
 
   /**
@@ -22,7 +28,7 @@ export class MerchantService {
    */
   async enableMerchantMode(accountId: string, displayName?: string): Promise<MerchantProfile> {
     const existing = await this.repository.findByAccountId(accountId);
-    if (existing) return existing;
+    if (existing) return this.withSettledBalance(existing);
 
     const profile = MerchantProfile.create(
       accountId,
@@ -30,11 +36,25 @@ export class MerchantService {
       this.clock(),
     );
     await this.repository.save(profile);
-    return profile;
+    return this.withSettledBalance(profile);
   }
 
   /** Fetch the merchant dashboard state for an account (null if not enabled). */
   async getByAccountId(accountId: string): Promise<MerchantProfile | null> {
-    return this.repository.findByAccountId(accountId);
+    const profile = await this.repository.findByAccountId(accountId);
+    return profile ? this.withSettledBalance(profile) : null;
+  }
+
+  /** Overlay the real settled balance (Settlement context) onto the profile. */
+  private async withSettledBalance(profile: MerchantProfile): Promise<MerchantProfile> {
+    if (!this.settlementRepository) return profile;
+    const settled = await this.settlementRepository.settledBalance(profile.merchantId);
+    return new MerchantProfile(
+      profile.merchantId,
+      profile.accountId,
+      profile.displayName,
+      new MerchantWallet(profile.wallet.pendingSettlement, settled),
+      profile.createdAt,
+    );
   }
 }

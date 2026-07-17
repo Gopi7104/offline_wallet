@@ -130,6 +130,42 @@ describe('PostgreSQL persistence — data survives a simulated backend restart',
     }
   });
 
+  it('appendAtomically serializes concurrent appends — no fork under a real race', async () => {
+    const ledgerRepo = new PgLedgerRepository(getPool());
+    const before = await ledgerRepo.all();
+
+    const buildEntry = (tag: string) => (prevHash: string | null) =>
+      LedgerEntry.forSettlement({
+        merchantId: `MER-RACE-${tag}`,
+        amount: unwrap(Money.fromRupees(1)),
+        acceptedTokenIds: [`race-${tag}`],
+        rejectedTokenIds: [],
+        duplicateTokenIds: [],
+        status: 'SUCCESS',
+        timestamp: new Date(),
+        prevHash,
+      });
+
+    // Fire concurrent appends through the same atomic path the settlement
+    // service uses — this is exactly what would fork the chain (two entries
+    // both pointing at the same prevHash) without the advisory lock in
+    // appendAtomically().
+    const N = 8;
+    await Promise.all(Array.from({ length: N }, (_, i) => ledgerRepo.appendAtomically(buildEntry(`${i}`))));
+
+    const all = await ledgerRepo.all();
+    const appended = all.slice(before.length);
+    expect(appended).toHaveLength(N);
+
+    // The chain must be a single, unforked sequence: each entry's prevHash
+    // equals the immediately preceding entry's hash, in seq order.
+    let expectedPrev = before[before.length - 1]?.hash ?? null;
+    for (const entry of appended) {
+      expect(entry.prevHash).toBe(expectedPrev);
+      expectedPrev = entry.hash;
+    }
+  });
+
   it('duplicate spent-token detection persists across a restart', async () => {
     const firstClaim = await new PgSpentTokenIndex(getPool()).tryClaim('restart-spent-token-1');
     expect(firstClaim).toBe(true);
