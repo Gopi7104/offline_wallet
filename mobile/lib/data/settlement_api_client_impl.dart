@@ -6,7 +6,8 @@ import 'settlement_api_client.dart';
 /// See WalletApiClientImpl: an unreachable backend must fail fast, not hang
 /// the merchant on "Processing…" forever.
 const Duration _connectTimeout = Duration(seconds: 5);
-const Duration _requestTimeout = Duration(seconds: 8);
+// See WalletApiClientImpl: must outlast a Render free-tier cold-start wake-up.
+const Duration _requestTimeout = Duration(seconds: 45);
 
 /// Concrete HTTP client for POST /v1/settlement. Uses dart:io HttpClient
 /// directly (consistent with the wallet/merchant clients).

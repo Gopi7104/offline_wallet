@@ -9,7 +9,11 @@ import 'wallet_api_client.dart';
 /// forever. Every call here is best-effort — the offline wallet must fall
 /// back quickly, not stall the caller.
 const Duration _connectTimeout = Duration(seconds: 5);
-const Duration _requestTimeout = Duration(seconds: 8);
+// Render free-tier instances spin down after ~15 min idle; the next request
+// pays a cold-start wake-up (often 20-45s) before the app responds at all.
+// This must outlast that wake-up, or every first-request-after-idle looks
+// like "server unreachable" even though the backend is fine.
+const Duration _requestTimeout = Duration(seconds: 45);
 
 /// Concrete HTTP client for wallet endpoints.
 class WalletApiClientImpl implements WalletApiClient {

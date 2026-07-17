@@ -150,8 +150,10 @@ class MerchantReceiveController extends StateNotifier<MerchantReceiveState> {
     _msgSub = _transport.incomingMessages.listen(_onMessage, onError: _onMessageError);
     try {
       await _transport.startAdvertising();
-    } catch (_) {
-      _rejectLocal(TransferRejectReason.internal, 'Could not start advertising.');
+    } catch (error) {
+      final message =
+          error is BleTransportException ? error.message : 'Could not start advertising.';
+      _rejectLocal(TransferRejectReason.internal, message);
     }
   }
 

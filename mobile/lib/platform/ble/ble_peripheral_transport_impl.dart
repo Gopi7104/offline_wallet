@@ -48,6 +48,32 @@ class BlePeripheralTransportImpl implements BlePeripheralTransport {
 
   @override
   Future<void> startAdvertising() async {
+    // Check the radio itself before touching the GATT server: with Bluetooth
+    // off, native `openGattServer()` fails with an opaque platform error (logs
+    // as "Fail to get GATT Server connection") that gives the receive
+    // controller nothing to show the merchant beyond "Could not start
+    // advertising." — indistinguishable from a real bug. Surface the actual
+    // cause instead.
+    final readiness = await UniversalBlePeripheral.getAvailabilityState();
+    switch (readiness) {
+      case PeripheralReadinessState.bluetoothOff:
+        throw BleTransportException('Bluetooth is turned off. Turn it on to receive payments.');
+      case PeripheralReadinessState.unauthorized:
+        throw BleTransportException('Bluetooth permission is required to receive payments.');
+      case PeripheralReadinessState.unsupported:
+        // On Android this can mean genuinely-unsupported hardware, but the
+        // native check (adapter.isMultipleAdvertisementSupported()) also
+        // reports UNSUPPORTED whenever Bluetooth is simply off, on many
+        // chipsets — so don't tell the merchant their device is incapable
+        // when the real fix is almost always just turning Bluetooth on.
+        throw BleTransportException(
+          'Could not start Bluetooth advertising. Make sure Bluetooth is turned on and try again.',
+        );
+      case PeripheralReadinessState.ready:
+      case PeripheralReadinessState.unknown:
+        break;
+    }
+
     await UniversalBlePeripheral.addService(
       BlePeripheralService(
         uuid: BleUuids.service,
