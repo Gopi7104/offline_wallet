@@ -11,8 +11,13 @@ let pool: Pool | undefined;
 
 export function getPool(): Pool {
   if (!pool) {
-    const { databaseUrl } = loadConfig();
-    pool = new Pool({ connectionString: databaseUrl });
+    const { databaseUrl, databaseSsl } = loadConfig();
+    pool = new Pool({
+      connectionString: databaseUrl,
+      // Render (and most managed Postgres) require TLS; local dev Postgres
+      // has no TLS listener. See platform/config.ts's shouldUseSsl().
+      ...(databaseSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
   }
   return pool;
 }

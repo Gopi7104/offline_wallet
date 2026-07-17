@@ -36,6 +36,8 @@ export interface AppConfig {
   readonly env: string;
   readonly port: number;
   readonly databaseUrl: string;
+  /** Whether the PostgreSQL pool must negotiate TLS (Render requires it; local dev does not). */
+  readonly databaseSsl: boolean;
   readonly logLevel: string;
   readonly risk: RiskLimitsConfig;
   readonly rateLimit: RateLimitConfig;
@@ -50,6 +52,25 @@ export interface AppConfig {
 function defaultDatabaseUrl(nodeEnv: string): string {
   const db = nodeEnv === 'test' ? 'offline_wallet_test' : 'offline_wallet';
   return `postgres://wallet:wallet@localhost:5432/${db}`;
+}
+
+/**
+ * Render (and most managed Postgres providers) require TLS and reject plain
+ * connections ("SSL/TLS required"); local/dev Postgres has no TLS listener
+ * at all. Detect from the connection target's host rather than NODE_ENV, so
+ * a production DATABASE_URL that happens to point at localhost (e.g. an SSH
+ * tunnel) still works — `DATABASE_SSL` remains as an explicit escape hatch.
+ */
+function shouldUseSsl(databaseUrl: string, env: NodeJS.ProcessEnv): boolean {
+  if (env.DATABASE_SSL !== undefined) {
+    return env.DATABASE_SSL === 'true';
+  }
+  try {
+    const host = new URL(databaseUrl).hostname;
+    return host !== 'localhost' && host !== '127.0.0.1';
+  } catch {
+    return false;
+  }
 }
 
 function int(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
@@ -75,15 +96,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  // NODE_ENV=test always uses the test database, even if a developer's
+  // .env sets DATABASE_URL for local dev use — otherwise `npm test`
+  // silently truncates dev data (tests/setup/db_setup.ts's beforeAll)
+  // whenever DATABASE_URL happens to be set, defeating the whole point
+  // of a separate test database.
+  const databaseUrl =
+    nodeEnv === 'test' ? defaultDatabaseUrl('test') : (env.DATABASE_URL ?? defaultDatabaseUrl(nodeEnv));
+
   return {
     env: nodeEnv,
     port: int(env, 'PORT', 3000),
-    // NODE_ENV=test always uses the test database, even if a developer's
-    // .env sets DATABASE_URL for local dev use — otherwise `npm test`
-    // silently truncates dev data (tests/setup/db_setup.ts's beforeAll)
-    // whenever DATABASE_URL happens to be set, defeating the whole point
-    // of a separate test database.
-    databaseUrl: nodeEnv === 'test' ? defaultDatabaseUrl('test') : (env.DATABASE_URL ?? defaultDatabaseUrl(nodeEnv)),
+    databaseUrl,
+    databaseSsl: shouldUseSsl(databaseUrl, env),
     logLevel: env.LOG_LEVEL ?? (isProduction ? 'info' : 'debug'),
     risk: {
       maxOfflineWalletBalancePaise: int(env, 'RISK_MAX_OFFLINE_WALLET_BALANCE_PAISE', 50_000 * 100),
