@@ -1,3 +1,5 @@
+import 'package:offline_wallet/domain/token.dart';
+
 /// HTTP client for wallet endpoints (talks to the backend).
 /// For now, uses dart:io HttpClient directly. In production, use
 /// a robust client like dio or http.
@@ -50,11 +52,17 @@ class LoadResponse {
   final String accountId;
   final int newBalancePaise;
   final String currency;
+  /// The exact tokens the backend just minted for this load (Task 10) — real
+  /// Ed25519-signed coins, wire-shaped identically to `Token.toJson()`. The
+  /// wallet must store and later spend these exact tokens, never a
+  /// locally-generated placeholder.
+  final List<Token> tokens;
 
   LoadResponse({
     required this.accountId,
     required this.newBalancePaise,
     required this.currency,
+    required this.tokens,
   });
 
   factory LoadResponse.fromJson(Map<String, dynamic> json) {
@@ -62,6 +70,9 @@ class LoadResponse {
       accountId: json['accountId'] as String,
       newBalancePaise: (json['newBalance']['paise'] as num).toInt(),
       currency: json['newBalance']['currency'] as String,
+      tokens: ((json['tokens'] as List?) ?? const [])
+          .map((t) => Token.fromJson((t as Map).cast<String, dynamic>()))
+          .toList(),
     );
   }
 }

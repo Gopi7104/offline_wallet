@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:offline_wallet/core/crypto/device_keypair_store.dart';
 import 'package:offline_wallet/data/token_store.dart';
 import 'package:offline_wallet/domain/qr_codec.dart';
 import 'package:offline_wallet/features/pay/payment_session_controller.dart';
@@ -7,6 +8,7 @@ import 'package:offline_wallet/features/wallet/wallet_provider.dart';
 import 'package:offline_wallet/platform/ble/ble_permission_service.dart';
 
 import 'fake_ble_transports.dart';
+import 'fake_secure_store.dart';
 
 /// End-to-end offline payment over a wired in-memory BLE link: a real customer
 /// PaymentSessionController and a real MerchantReceiveController exchange the
@@ -36,6 +38,7 @@ void main() {
       transport: link.central,
       tokenWallet: wallet,
       permissions: BlePermissionService(),
+      deviceKeys: Ed25519DeviceKeyPairStore(FakeSecureStore()),
       params: PaymentSessionParams(
         merchantId: qr.merchantId,
         nonce: qr.nonce,

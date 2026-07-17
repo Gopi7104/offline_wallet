@@ -6,7 +6,17 @@ import {
   EmptySettlement,
   MalformedSettlement,
   UnknownMerchant,
+  UnauthorizedMerchant,
 } from '../domain/errors';
+import { logger } from '../../../platform/logger';
+
+/**
+ * Upper bound on tokens per settlement request (production hardening §9,
+ * §NFR-PERF-02: "a typical transfer is ≤ ~20 coins"). Generous margin above
+ * real usage; exists to cap per-request work (signature verification, risk
+ * evaluation, a DB round-trip per token) against a pathological payload.
+ */
+const MAX_TOKENS_PER_SETTLEMENT = 500;
 
 /**
  * HTTP controller (interface adapter) for Settlement, POST /v1/settlement.
@@ -49,6 +59,13 @@ export class SettlementController {
         });
         return;
       }
+      if (tokens.length > MAX_TOKENS_PER_SETTLEMENT) {
+        res.status(400).json({
+          error: 'MALFORMED_PAYLOAD',
+          message: `Settlement contained ${tokens.length} tokens, above the limit of ${MAX_TOKENS_PER_SETTLEMENT}`,
+        });
+        return;
+      }
 
       // Parse every token up-front; a single malformed entry fails the whole
       // payload (400) — distinct from a valid-but-rejected (expired/duplicate)
@@ -66,7 +83,13 @@ export class SettlementController {
         parsed.push(token);
       }
 
-      const command: SettlementCommand = { merchantId, tokens: parsed };
+      logger.info('settlement.requested', { merchantId, accountId: req.accountId, tokenCount: parsed.length });
+
+      const command: SettlementCommand = {
+        merchantId,
+        tokens: parsed,
+        ...(req.accountId !== undefined ? { callerAccountId: req.accountId } : {}),
+      };
       const outcome = await this.service.settle(command);
 
       if (!outcome.ok) {
@@ -76,7 +99,7 @@ export class SettlementController {
 
       res.status(200).json(this.toJson(outcome.value));
     } catch (error) {
-      console.error('SettlementController error:', error);
+      logger.error('settlement.controller_error', { message: (error as Error).message });
       res.status(500).json({ error: 'INTERNAL_ERROR', message: 'An error occurred' });
     }
   }
@@ -84,6 +107,10 @@ export class SettlementController {
   private handleDomainError(error: Error, res: Response): void {
     if (error instanceof UnknownMerchant) {
       res.status(404).json({ error: error.code, message: error.message });
+      return;
+    }
+    if (error instanceof UnauthorizedMerchant) {
+      res.status(403).json({ error: error.code, message: error.message });
       return;
     }
     if (error instanceof EmptySettlement || error instanceof MalformedSettlement) {

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:offline_wallet/core/crypto/device_keypair_store.dart';
 import 'package:offline_wallet/domain/ble_message.dart';
 import 'package:offline_wallet/domain/ble_transport.dart';
 import 'package:offline_wallet/domain/denominations.dart';
@@ -79,6 +80,7 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
   final BleCentralTransport _transport;
   final TokenWalletNotifier _tokenWallet;
   final BlePermissionService _permissions;
+  final DeviceKeyPairStore _deviceKeys;
   final PaymentSessionParams _params;
   final Duration _connectTimeout;
   final Duration _stepTimeout;
@@ -95,12 +97,14 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
     required BleCentralTransport transport,
     required TokenWalletNotifier tokenWallet,
     required BlePermissionService permissions,
+    required DeviceKeyPairStore deviceKeys,
     required PaymentSessionParams params,
     Duration connectTimeout = const Duration(seconds: 20),
     Duration stepTimeout = const Duration(seconds: 20),
   })  : _transport = transport,
         _tokenWallet = tokenWallet,
         _permissions = permissions,
+        _deviceKeys = deviceKeys,
         _params = params,
         _connectTimeout = connectTimeout,
         _stepTimeout = stepTimeout,
@@ -227,9 +231,11 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
     _set(PaymentSessionStatus.sending, 'Sending payment…');
     try {
       await _transport.send(BleMessage.ack(TransferAck(nonce: offer.nonce)));
-      final transfer = TokenTransfer(
+      final payerPublicKey = await _deviceKeys.publicKeyHex();
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final payload = canonicalTransferPayload(
+        v: kTransferProtocolVersion,
         tokenIds: _selectedTokenIds,
-        tokens: selected.map((t) => t.copyWithStatus(TokenStatus.inTransit)).toList(),
         // Always the payer's own resolved amount — for a Fixed Amount offer
         // this already equals offer.amountPaise (checked above); for Open
         // Cash, offer.amountPaise is null and this is the only amount there
@@ -238,9 +244,21 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
         amountPaise: amountPaise,
         merchantId: offer.merchantId,
         nonce: offer.nonce,
-        timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        timestamp: timestamp,
         payerId: kCustomerAccountId,
-        payerSignature: 'payer-sig-placeholder',
+        payerPublicKeyHex: payerPublicKey,
+      );
+      final signature = await _deviceKeys.sign(payload);
+      final transfer = TokenTransfer(
+        tokenIds: _selectedTokenIds,
+        tokens: selected.map((t) => t.copyWithStatus(TokenStatus.inTransit)).toList(),
+        amountPaise: amountPaise,
+        merchantId: offer.merchantId,
+        nonce: offer.nonce,
+        timestamp: timestamp,
+        payerId: kCustomerAccountId,
+        payerPublicKey: payerPublicKey,
+        payerSignature: signature,
       );
       await _transport.send(BleMessage.tokenTransfer(transfer));
       _set(PaymentSessionStatus.awaitingComplete, 'Waiting for confirmation…');
@@ -329,6 +347,12 @@ class PaymentSessionController extends StateNotifier<PaymentSessionState> {
     _scanSub = null;
     _linkSub = null;
     _msgSub = null;
+    // disconnect() no-ops if a device was never connected, so a session that
+    // fails/times out during the scanning phase must also stopScan() itself —
+    // otherwise the transport's link state stays stuck at `scanning` forever,
+    // and the next payment attempt's scanForMerchants() throws (illegal
+    // scanning -> scanning transition) instead of starting a fresh scan.
+    unawaited(_transport.stopScan());
     if (disconnect) unawaited(_transport.disconnect());
   }
 
@@ -346,6 +370,7 @@ final paymentSessionProvider = StateNotifierProvider.autoDispose
     transport: ref.watch(bleCentralTransportProvider),
     tokenWallet: ref.watch(tokenWalletProvider.notifier),
     permissions: ref.watch(blePermissionServiceProvider),
+    deviceKeys: ref.watch(deviceKeyPairStoreProvider),
     params: params,
   );
   return controller;

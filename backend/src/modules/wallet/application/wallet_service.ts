@@ -3,6 +3,15 @@ import { DomainError } from '../../../shared/errors';
 import { Wallet } from '../domain/wallet';
 import { WalletRepository } from '../domain/wallet_repository';
 import { IssuanceService } from '../../issuance/application/issuance_service';
+import { Token } from '../../issuance/domain/token';
+import { RiskEngine } from '../../risk/application/risk_engine';
+import { logger } from '../../../platform/logger';
+
+/** Result of a successful load: the new balance and the exact tokens just issued. */
+export interface LoadResult {
+  readonly balance: Money;
+  readonly tokens: Token[];
+}
 
 /**
  * Raised when a load would push the wallet above the holding cap (FR-ISS-06).
@@ -34,6 +43,13 @@ export class WalletService {
     private readonly walletRepository: WalletRepository,
     private readonly issuanceService: IssuanceService,
     private readonly maxHoldingPaise: number = WalletService.DEFAULT_MAX_HOLDING_PAISE,
+    // Optional: when provided, the wallet-balance decision is delegated to
+    // the Risk & Compliance context (production hardening §2) instead of the
+    // raw `maxHoldingPaise` comparison below — "risk decisions must remain
+    // inside the Risk bounded context". Omitted by every existing caller/test
+    // that predates the Risk engine; the real composition root
+    // (wallet/http/index.ts) always supplies one.
+    private readonly riskEngine?: RiskEngine,
   ) {}
 
   /**
@@ -46,11 +62,19 @@ export class WalletService {
 
   /**
    * Load wallet with digital cash tokens (ARCHITECTURE.md §4.2, §4.3, FR-ISS-02).
-   * Task 3: creates fine-denomination tokens via IssuanceService.
-   * Bank debit is simulated; ledger entry comes in Task 5.
-   * Returns the new balance (sum of token denominations).
+   * Creates fine-denomination tokens via IssuanceService, each signed by the
+   * issuer. Bank debit is simulated; ledger entry comes in Task 5.
+   *
+   * Returns the new balance AND the exact tokens just issued (Task 10 —
+   * connects the real backend-issued, Ed25519-signed tokens to the mobile
+   * wallet; previously only the balance was returned and the mobile app
+   * substituted locally-minted placeholder tokens instead). The returned
+   * tokens carry the SAME tokenId/denomination/issuedAt/expiry/signature
+   * that `issuanceService.issueTokens` produced — only `status` is advanced
+   * to `'in_wallet'` (mirroring `Wallet.addTokens`'s own transition), so what
+   * the caller receives matches exactly what was just persisted.
    */
-  async loadWallet(accountId: string, amount: Money): Promise<Money> {
+  async loadWallet(accountId: string, amount: Money): Promise<LoadResult> {
     // Fetch or create wallet.
     let wallet = await this.walletRepository.findByAccountId(accountId);
     if (!wallet) {
@@ -60,18 +84,25 @@ export class WalletService {
     // FR-ISS-06: reject a load that would push the wallet above the holding cap.
     // Checked before minting so an over-cap request never creates tokens.
     const projected = wallet.balance.add(amount);
-    if (projected.paise > this.maxHoldingPaise) {
+    const decision = this.riskEngine
+      ? this.riskEngine.checkWalletBalance(projected.paise)
+      : { allowed: projected.paise <= this.maxHoldingPaise };
+    if (!decision.allowed) {
+      logger.warn('wallet.holding_cap_exceeded', { accountId, projectedPaise: projected.paise });
       throw new HoldingCapExceeded(this.maxHoldingPaise, projected.paise);
     }
 
     // Issue tokens for the requested amount.
     const tokens = await this.issuanceService.issueTokens(accountId, amount);
 
-    // Add tokens to wallet.
+    // Add tokens to wallet (transitions each minted -> in_wallet internally).
     wallet = wallet.addTokens(tokens);
 
     // Persist.
     await this.walletRepository.save(wallet);
-    return wallet.balance;
+    logger.info('wallet.loaded', { accountId, amountPaise: amount.paise, newBalancePaise: wallet.balance.paise });
+
+    const issuedTokens = tokens.map((t) => t.withStatus('in_wallet'));
+    return { balance: wallet.balance, tokens: issuedTokens };
   }
 }

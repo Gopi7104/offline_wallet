@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'token.dart';
 
 /// Protocol version for the offline payment exchange (PAYMENT_PROTOCOL.md §10).
@@ -22,6 +24,7 @@ enum TransferRejectReason {
   duplicate,
   cancelled,
   disconnected,
+  invalidSignature,
   internal;
 
   String get wire => name;
@@ -44,8 +47,43 @@ enum TransferRejectReason {
     duplicate => 'This payment was already processed.',
     cancelled => 'The payment was cancelled.',
     disconnected => 'The connection was lost before the payment completed.',
+    invalidSignature => 'This payment could not be verified and was rejected.',
     internal => 'Something went wrong while processing the payment.',
   };
+}
+
+/// Canonical signing payload for a Transfer — the payer's ownership-transfer
+/// proof (FR-PAY-04, PAYMENT_PROTOCOL.md §4.2 `TransferSigningPayload`).
+/// Mirrors the deterministic JSON-template pattern already used for issuer
+/// signing on the backend (`token_canonical_payload.ts`): a FIXED field order
+/// with each value individually JSON-escaped, never `jsonEncode(mapLiteral)`
+/// — Map key order/whitespace is not a byte-for-byte contract, and a
+/// signature must be reconstructed identically by both signer and verifier.
+/// `tokenIds` are sorted so reordering them in transit can't evade the
+/// signature; binding `merchantId` + `nonce` + `timestamp` is what defeats
+/// replay to a second merchant; binding `payerPublicKey` itself prevents a
+/// captured signature from being paired with a substituted key.
+List<int> canonicalTransferPayload({
+  required int v,
+  required List<String> tokenIds,
+  required int amountPaise,
+  required String merchantId,
+  required String nonce,
+  required int timestamp,
+  required String payerId,
+  required String payerPublicKeyHex,
+}) {
+  final sortedIds = [...tokenIds]..sort();
+  final canonical =
+      '{"v":${jsonEncode(v)}'
+      ',"tokenIds":${jsonEncode(sortedIds)}'
+      ',"amount":${jsonEncode(amountPaise)}'
+      ',"merchantId":${jsonEncode(merchantId)}'
+      ',"nonce":${jsonEncode(nonce)}'
+      ',"timestamp":${jsonEncode(timestamp)}'
+      ',"payerId":${jsonEncode(payerId)}'
+      ',"payerPublicKey":${jsonEncode(payerPublicKeyHex)}}';
+  return utf8.encode(canonical);
 }
 
 /// Merchant → payer: the authoritative payment request over BLE (the OFFER).
@@ -103,8 +141,12 @@ class TransferAck {
 }
 
 /// Payer → merchant: the ownership-transfer proof + the tokens themselves
-/// (PAYMENT_PROTOCOL.md §4.2). [payerSignature] is a Task-8 placeholder; Task 9
-/// replaces it with a real Ed25519 signature over the canonical payload.
+/// (PAYMENT_PROTOCOL.md §4.2). [payerSignature] is a real Ed25519 signature
+/// (Task 9) by the payer's device key over [canonicalTransferPayload];
+/// [payerPublicKey] (hex) is carried alongside it so the merchant can verify
+/// fully offline, with no need to look up the key from a backend it has no
+/// connectivity to at BLE time (§6.4 "offline verification only guarantees
+/// the transfer is well-formed, fresh, and intended for this merchant").
 class TokenTransfer {
   final int v;
   final List<String> tokenIds;
@@ -114,7 +156,8 @@ class TokenTransfer {
   final String nonce;
   final int timestamp; // epoch seconds, payer clock
   final String payerId;
-  final String payerSignature; // placeholder
+  final String payerPublicKey; // hex-encoded Ed25519 public key
+  final String payerSignature; // hex-encoded Ed25519 signature
 
   const TokenTransfer({
     this.v = kTransferProtocolVersion,
@@ -125,8 +168,21 @@ class TokenTransfer {
     required this.nonce,
     required this.timestamp,
     required this.payerId,
+    required this.payerPublicKey,
     required this.payerSignature,
   });
+
+  /// The exact bytes the payer signed / the merchant must reconstruct to verify.
+  List<int> signingPayload() => canonicalTransferPayload(
+    v: v,
+    tokenIds: tokenIds,
+    amountPaise: amountPaise,
+    merchantId: merchantId,
+    nonce: nonce,
+    timestamp: timestamp,
+    payerId: payerId,
+    payerPublicKeyHex: payerPublicKey,
+  );
 
   Map<String, dynamic> toJson() => {
     'v': v,
@@ -137,6 +193,7 @@ class TokenTransfer {
     'n': nonce,
     'ts': timestamp,
     'payer': payerId,
+    'pk': payerPublicKey,
     'sig': payerSignature,
   };
 
@@ -151,6 +208,7 @@ class TokenTransfer {
     nonce: j['n'] as String,
     timestamp: j['ts'] as int,
     payerId: j['payer'] as String,
+    payerPublicKey: j['pk'] as String? ?? '',
     payerSignature: j['sig'] as String,
   );
 }

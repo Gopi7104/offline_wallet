@@ -31,4 +31,17 @@ export class UnknownMerchant extends DomainError {
   }
 }
 
-export type SettlementError = EmptySettlement | MalformedSettlement | UnknownMerchant;
+/**
+ * The authenticated caller does not own the merchantId it is trying to settle
+ * for (security review finding, production hardening §9: settlement
+ * previously trusted `merchantId` from the request body with no ownership
+ * check). Maps to HTTP 403.
+ */
+export class UnauthorizedMerchant extends DomainError {
+  readonly code = 'UNAUTHORIZED_MERCHANT';
+  constructor(merchantId: string) {
+    super(`The authenticated account is not authorized to settle for merchantId '${merchantId}'`);
+  }
+}
+
+export type SettlementError = EmptySettlement | MalformedSettlement | UnknownMerchant | UnauthorizedMerchant;

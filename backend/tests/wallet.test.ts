@@ -8,6 +8,9 @@ import { IssuanceService } from '../src/modules/issuance/application/issuance_se
 import { Token, IllegalTokenTransition } from '../src/modules/issuance/domain/token';
 import { Money, PAISE_PER_RUPEE } from '../src/shared/money';
 import { unwrap } from '../src/shared/result';
+import { Ed25519TokenVerifier } from '../src/modules/settlement/infra/ed25519_token_verifier';
+import { SubmittedToken } from '../src/modules/settlement/domain/submitted_token';
+import { toEpochSeconds } from '../src/shared/crypto/token_canonical_payload';
 
 describe('Wallet (Task 3: digital cash tokens)', () => {
   describe('Token aggregate (domain)', () => {
@@ -160,15 +163,15 @@ describe('Wallet (Task 3: digital cash tokens)', () => {
 
     it('loads wallet with tokens and returns new balance', async () => {
       const amount = unwrap(Money.fromRupees(50));
-      const newBalance = await service.loadWallet('grace', amount);
-      expect(newBalance.paise).toBe(5000);
+      const result = await service.loadWallet('grace', amount);
+      expect(result.balance.paise).toBe(5000);
     });
 
     it('accumulates loads (tokens are added)', async () => {
       const twenty = unwrap(Money.fromRupees(20));
       await service.loadWallet('henry', twenty);
-      const newBalance = await service.loadWallet('henry', twenty);
-      expect(newBalance.paise).toBe(4000); // ₹40
+      const result = await service.loadWallet('henry', twenty);
+      expect(result.balance.paise).toBe(4000); // ₹40
     });
 
     it('getBalance reflects tokens', async () => {
@@ -187,8 +190,42 @@ describe('Wallet (Task 3: digital cash tokens)', () => {
 
     it('allows a load exactly at the holding cap', async () => {
       const atCap = unwrap(Money.fromPaise(WalletService.DEFAULT_MAX_HOLDING_PAISE));
-      const balance = await service.loadWallet('cap-edge', atCap);
-      expect(balance.paise).toBe(WalletService.DEFAULT_MAX_HOLDING_PAISE);
+      const result = await service.loadWallet('cap-edge', atCap);
+      expect(result.balance.paise).toBe(WalletService.DEFAULT_MAX_HOLDING_PAISE);
+    });
+
+    it('returns the exact tokens issued, each carrying a real issuer signature (Task 10)', async () => {
+      const amount = unwrap(Money.fromRupees(37)); // ₹20+10+5+2 = 4 tokens
+      const result = await service.loadWallet('token-check', amount);
+      expect(result.tokens).toHaveLength(4);
+      expect(result.tokens.reduce((sum, t) => sum + t.denomination.paise, 0)).toBe(3700);
+      for (const token of result.tokens) {
+        expect(token.status).toBe('in_wallet');
+        expect(token.bankSignature).toMatch(/^[0-9a-f]{128}$/); // real Ed25519 sig, not a placeholder
+        const verifier = new Ed25519TokenVerifier();
+        expect(
+          verifier.verify(
+            {
+              tokenId: token.tokenId,
+              denominationPaise: token.denomination.paise,
+              ownerId: token.ownerId,
+              issuedAtEpochSeconds: toEpochSeconds(token.issuedAt),
+              expiryEpochSeconds: toEpochSeconds(token.expiry),
+            },
+            token.bankSignature,
+          ),
+        ).toBe(true);
+      }
+    });
+
+    it("toWireJson() round-trips through SubmittedToken.fromWire (the exact shape settlement/mobile consume)", async () => {
+      const amount = unwrap(Money.fromRupees(10));
+      const result = await service.loadWallet('wire-check', amount);
+      const wire = result.tokens[0]!.toWireJson();
+      const parsed = SubmittedToken.fromWire(wire);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.tokenId).toBe(result.tokens[0]!.tokenId);
+      expect(parsed!.bankSignature).toBe(result.tokens[0]!.bankSignature);
     });
   });
 
@@ -204,18 +241,39 @@ describe('Wallet (Task 3: digital cash tokens)', () => {
       expect(res.body.tokens).toBeUndefined();
     });
 
-    it('POST /v1/wallet/load creates tokens, returns balance', async () => {
+    it('POST /v1/wallet/load creates tokens, returns balance AND the issued tokens (Task 10)', async () => {
       const loadRes = await request(app)
         .post('/v1/wallet/load')
         .set('x-account-id', 'kate')
-        .send({ amount: 15 * PAISE_PER_RUPEE }); // ₹15
+        .send({ amount: 15 * PAISE_PER_RUPEE }); // ₹15 -> ₹10 + ₹5
 
       expect(loadRes.status).toBe(201);
       expect(loadRes.body.accountId).toBe('kate');
       expect(loadRes.body.loaded.paise).toBe(1500);
       expect(loadRes.body.newBalance.paise).toBe(1500);
-      // Tokens are internal
-      expect(loadRes.body.tokens).toBeUndefined();
+
+      // The wire-shaped tokens themselves are now returned, so the mobile
+      // wallet can store and later spend these exact backend-issued,
+      // signed tokens instead of a locally-minted placeholder (Task 10).
+      const tokens = loadRes.body.tokens as Array<Record<string, unknown>>;
+      expect(Array.isArray(tokens)).toBe(true);
+      expect(tokens.reduce((sum, t) => sum + (t.denom as number), 0)).toBe(1500);
+      for (const wire of tokens) {
+        expect(typeof wire.id).toBe('string');
+        expect(wire.owner).toBe('kate');
+        const parsed = SubmittedToken.fromWire(wire);
+        expect(parsed).not.toBeNull();
+        expect(new Ed25519TokenVerifier().verify(
+          {
+            tokenId: parsed!.tokenId,
+            denominationPaise: parsed!.denomination.paise,
+            ownerId: parsed!.ownerId,
+            issuedAtEpochSeconds: toEpochSeconds(parsed!.issuedAt),
+            expiryEpochSeconds: toEpochSeconds(parsed!.expiry),
+          },
+          parsed!.bankSignature,
+        )).toBe(true);
+      }
     });
 
     it('accumulates loads (tokens accumulate)', async () => {

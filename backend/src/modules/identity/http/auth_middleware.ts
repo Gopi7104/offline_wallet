@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyFirebaseIdToken, FirebaseVerificationErrorCode } from '../infra/firebase_token_verifier';
+import { logger } from '../../../platform/logger';
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -51,10 +52,12 @@ export async function resolveAccountId(req: Request, res: Response, next: NextFu
 
       const result = await verifyFirebaseIdToken(token);
       if (!result.ok) {
+        logger.warn('auth.token_rejected', { reason: result.error });
         res.status(401).json({ error: result.error, message: VERIFICATION_ERROR_MESSAGES[result.error] });
         return;
       }
 
+      logger.debug('auth.token_verified', { accountId: result.user.uid });
       req.accountId = result.user.uid;
       req.firebaseUser = result.user;
       next();
@@ -68,12 +71,13 @@ export async function resolveAccountId(req: Request, res: Response, next: NextFu
       return;
     }
 
+    logger.warn('auth.missing_token', { path: req.path });
     res.status(401).json({
       error: 'MISSING_TOKEN',
       message: 'Authorization header with a Firebase ID token is required',
     });
   } catch (err) {
-    console.error('resolveAccountId: unexpected error verifying auth', err);
+    logger.error('auth.internal_error', { message: (err as Error).message });
     res.status(500).json({ error: 'AUTH_INTERNAL_ERROR', message: 'Failed to verify authentication' });
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:offline_wallet/core/crypto/device_keypair_store.dart';
+import 'package:offline_wallet/core/crypto/transfer_verifier.dart';
 import 'package:offline_wallet/data/token_store.dart';
 import 'package:offline_wallet/domain/ble_message.dart';
 import 'package:offline_wallet/domain/ble_transport.dart';
@@ -8,6 +10,7 @@ import 'package:offline_wallet/features/wallet/wallet_provider.dart';
 import 'package:offline_wallet/platform/ble/ble_permission_service.dart';
 
 import 'fake_ble_transports.dart';
+import 'fake_secure_store.dart';
 
 const _params = PaymentSessionParams(merchantId: 'MER-1', nonce: 'n-1', amountPaise: 25000);
 
@@ -18,14 +21,17 @@ void main() {
   late LinkedCentral central;
   late TokenWalletNotifier wallet;
   late PaymentSessionController controller;
+  late DeviceKeyPairStore deviceKeys;
 
   PaymentSessionController build({int mintPaise = 25000, PaymentSessionParams params = _params}) {
     wallet = TokenWalletNotifier(TokenMinter());
     if (mintPaise > 0) wallet.mint(mintPaise);
+    deviceKeys = Ed25519DeviceKeyPairStore(FakeSecureStore());
     controller = PaymentSessionController(
       transport: central,
       tokenWallet: wallet,
       permissions: BlePermissionService(),
+      deviceKeys: deviceKeys,
       params: params,
     );
     return controller;
@@ -56,6 +62,19 @@ void main() {
     final transfer = transferMsg.asTokenTransfer();
     expect(transfer.amountPaise, 25000);
     expect(transfer.tokens.length, 2); // ₹200 + ₹50
+
+    // Real Ed25519 owner signature (not a placeholder): verifies against the
+    // embedded public key, which matches the device key store's own key.
+    expect(transfer.payerSignature, isNot('payer-sig-placeholder'));
+    expect(transfer.payerPublicKey, await deviceKeys.publicKeyHex());
+    expect(
+      await verifyTransferSignature(
+        payload: transfer.signingPayload(),
+        signatureHex: transfer.payerSignature,
+        publicKeyHex: transfer.payerPublicKey,
+      ),
+      isTrue,
+    );
 
     // Merchant confirms → success, and tokens leave the wallet exactly now.
     central.emitIncoming(BleMessage.transferComplete(

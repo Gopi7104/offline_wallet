@@ -10,6 +10,8 @@ import 'package:offline_wallet/features/onboarding/onboarding_provider.dart';
 import 'package:offline_wallet/features/receive/merchant_provider.dart';
 import 'package:offline_wallet/features/security/security_provider.dart';
 import 'package:offline_wallet/core/money.dart';
+import 'package:offline_wallet/data/token_store.dart';
+import 'package:offline_wallet/domain/token.dart';
 import 'package:offline_wallet/domain/wallet.dart';
 import 'package:offline_wallet/domain/wallet_repository.dart';
 import 'package:offline_wallet/features/wallet/wallet_provider.dart';
@@ -25,7 +27,8 @@ class FakeWalletRepository implements WalletRepository {
   Future<void> saveWallet(Wallet wallet) async {}
 
   @override
-  Future<Money> loadFunds(String accountId, Money amount) async => amount;
+  Future<List<Token>> loadFunds(String accountId, Money amount) async =>
+      TokenMinter().mint(amount.paise, ownerId: accountId);
 }
 
 /// In-memory fake so the home test never touches the network.

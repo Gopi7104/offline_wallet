@@ -1,6 +1,7 @@
 import { Money } from '../../../shared/money';
 import { DomainError } from '../../../shared/errors';
 import { randomUUID } from 'crypto';
+import { toEpochSeconds } from '../../../shared/crypto/token_canonical_payload';
 
 /**
  * Token — digital cash (ARCHITECTURE.md §4.2, §4.3).
@@ -39,31 +40,59 @@ export class Token {
     readonly bankSignature: string, // Placeholder; Ed25519 in a later task.
   ) {}
 
+  /** Expiry date for a token minted at `issuedAt` with a given validity window. */
+  static computeExpiry(issuedAt: Date, expiryDays: number = 30): Date {
+    const expiry = new Date(issuedAt);
+    expiry.setDate(expiry.getDate() + expiryDays);
+    return expiry;
+  }
+
   /**
    * Create a new token. Denomination must be a valid fine denomination
    * (ARCHITECTURE.md D2: {1, 2, 5, 10, 20, 50, 100, 200, 500} INR).
+   *
+   * `overrides` lets the real minting path (IssuanceService) supply a
+   * pre-generated `tokenId` and a real Ed25519 `signature` — the signature
+   * must be computed over this exact tokenId/expiry, which the caller needs
+   * to know *before* the Token exists, so it can't be computed in here.
+   * Callers that don't care about the signature (most domain/unit tests)
+   * get a placeholder, matching prior behavior.
    */
   static create(
     denomination: Money,
     ownerId: string,
     issuedAt: Date,
     expiryDays: number = 30,
+    overrides: { tokenId?: string; signature?: string } = {},
   ): Token {
-    const expiry = new Date(issuedAt);
-    expiry.setDate(expiry.getDate() + expiryDays);
-    return new Token(
-      randomUUID(),
-      denomination,
-      ownerId,
-      issuedAt,
-      expiry,
-      'minted',
-      'placeholder-issuer-sig', // Task 5: replace with Ed25519 issuer signature.
-    );
+    const tokenId = overrides.tokenId ?? randomUUID();
+    const expiry = Token.computeExpiry(issuedAt, expiryDays);
+    const signature = overrides.signature ?? 'placeholder-issuer-sig';
+    return new Token(tokenId, denomination, ownerId, issuedAt, expiry, 'minted', signature);
   }
 
   isExpired(now: Date): boolean {
     return now > this.expiry;
+  }
+
+  /**
+   * Wire representation for a client (Task 10 — connects the real
+   * backend-issued token to the mobile wallet). Same shape the mobile app's
+   * `Token.toJson()`/`fromJson()` and settlement's `SubmittedToken.fromWire()`
+   * already speak — `{id, denom, owner, iat, exp, status, sig}` — so this
+   * reuses the one wire convention already established for a Token,
+   * rather than inventing a second one.
+   */
+  toWireJson(): Record<string, unknown> {
+    return {
+      id: this.tokenId,
+      denom: this.denomination.paise,
+      owner: this.ownerId,
+      iat: toEpochSeconds(this.issuedAt),
+      exp: toEpochSeconds(this.expiry),
+      status: this.status,
+      sig: this.bankSignature,
+    };
   }
 
   /**
