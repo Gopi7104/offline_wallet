@@ -150,6 +150,7 @@ flutter run -v
 
 # Build APK
 flutter build apk
+flutter build apk --release --dart-define=API_BASE_URL=https://offline-wallet.onrender.com 
 
 # Run tests
 flutter test
